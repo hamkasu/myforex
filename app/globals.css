@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import JetBrains Mono for numerical data */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ─── Base Resets ──────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  background-color: #0a0e1a;
+  color: #e2e8f0;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #243450;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+/* ─── Signal Badge Colors ───────────────────────────────────────────────────── */
+.signal-strong-buy  { @apply bg-green-700 text-green-100; }
+.signal-buy         { @apply bg-green-600/40 text-green-300 border border-green-600; }
+.signal-hold        { @apply bg-yellow-600/30 text-yellow-300 border border-yellow-600; }
+.signal-sell        { @apply bg-red-600/40 text-red-300 border border-red-600; }
+.signal-strong-sell { @apply bg-red-700 text-red-100; }
+
+/* ─── Chart Container ───────────────────────────────────────────────────────── */
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+/* ─── Number display (monospace for prices) ─────────────────────────────────── */
+.price {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Card styles ───────────────────────────────────────────────────────────── */
+.card {
+  @apply bg-[#1a2235] rounded-xl border border-[#1e2d45];
+}
+
+.card-header {
+  @apply px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2;
+}
+
+/* ─── Confidence bar ────────────────────────────────────────────────────────── */
+.confidence-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #1e2d45;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ─── Tab active indicator ──────────────────────────────────────────────────── */
+.tab-active {
+  @apply text-blue-400 border-b-2 border-blue-400;
+}
+
+/* ─── Mobile nav ────────────────────────────────────────────────────────────── */
+.bottom-nav-item {
+  @apply flex flex-col items-center gap-0.5 px-3 py-2 text-xs rounded-lg transition-colors;
+  min-width: 56px;
+}
+
+/* ─── Animations ────────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-slow {
+  animation: spin-slow 2s linear infinite;
+}
