@@ -1,9 +1,9 @@
-import type { Candle, ForexPair, SignalResult, Timeframe, AppSettings } from "@/types";
+import type { Candle, ForexPair, SDAnalysis, SignalResult, Timeframe, AppSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { calculateEMA } from "@/lib/indicators/ema";
-import { calculateRSI, latestRSI } from "@/lib/indicators/rsi";
+import { calculateRSI } from "@/lib/indicators/rsi";
 import { calculateMACD } from "@/lib/indicators/macd";
-import { calculateATR, latestATR, atrTradeSetup, isHighVolatility } from "@/lib/indicators/atr";
+import { calculateATR, atrTradeSetup, isHighVolatility } from "@/lib/indicators/atr";
 import {
   calculateSupportResistance,
   nearSupport,
@@ -12,6 +12,7 @@ import {
   brokeSupport,
 } from "@/lib/indicators/supportResistance";
 import { detectPatterns, patternLabel } from "@/lib/indicators/patterns";
+import { analyzeSDZones, buildSDReason } from "@/lib/indicators/supplyDemand";
 import {
   computeScoreBreakdown,
   scoreToSignal,
@@ -30,6 +31,7 @@ export interface EngineOutput extends SignalResult {
     supportLevels: number[];
     resistanceLevels: number[];
     detectedPatterns: string[];
+    sd: SDAnalysis;
   };
 }
 
@@ -47,17 +49,19 @@ function buildReasons(
     brokSup: boolean;
     patterns: string[];
     highVol: boolean;
+    sd: SDAnalysis;
+    decimals: number;
   }
 ): string[] {
   const reasons: string[] = [];
 
   // Trend
   if (score.trendScore >= 2)
-    reasons.push(`EMA20 (${input.ema20.toFixed(5)}) strongly above EMA50 (${input.ema50.toFixed(5)}) — bullish trend`);
+    reasons.push(`EMA20 (${input.ema20.toFixed(input.decimals)}) strongly above EMA50 (${input.ema50.toFixed(input.decimals)}) — bullish trend`);
   else if (score.trendScore === 1)
     reasons.push(`EMA20 above EMA50 — uptrend confirmed`);
   else if (score.trendScore <= -2)
-    reasons.push(`EMA20 (${input.ema20.toFixed(5)}) strongly below EMA50 (${input.ema50.toFixed(5)}) — bearish trend`);
+    reasons.push(`EMA20 (${input.ema20.toFixed(input.decimals)}) strongly below EMA50 (${input.ema50.toFixed(input.decimals)}) — bearish trend`);
   else if (score.trendScore === -1)
     reasons.push(`EMA20 below EMA50 — downtrend active`);
   else
@@ -77,9 +81,9 @@ function buildReasons(
   // MACD
   if (!isNaN(input.macdLine) && !isNaN(input.macdSignal)) {
     if (input.macdLine > input.macdSignal)
-      reasons.push(`MACD (${input.macdLine.toFixed(5)}) above signal — bullish`);
+      reasons.push(`MACD (${input.macdLine.toFixed(input.decimals)}) above signal — bullish`);
     else
-      reasons.push(`MACD (${input.macdLine.toFixed(5)}) below signal — bearish`);
+      reasons.push(`MACD (${input.macdLine.toFixed(input.decimals)}) below signal — bearish`);
   }
 
   // S/R
@@ -87,6 +91,10 @@ function buildReasons(
   if (input.brokSup) reasons.push("Price broke through support — bearish breakdown");
   if (input.nearSup && !input.brokSup) reasons.push("Price near support zone — potential bounce");
   if (input.nearRes && !input.brokRes) reasons.push("Price near resistance — caution, possible rejection");
+
+  // Supply & Demand
+  const sdReason = buildSDReason(input.sd, input.decimals);
+  if (sdReason) reasons.push(sdReason);
 
   // Patterns
   if (input.patterns.length > 0) {
@@ -108,42 +116,46 @@ export function runSignalEngine(
   const closes = candles.map((c) => c.close);
   const len = candles.length;
   const now = candles[len - 1].time;
+  const decimals = pair === "GBP/JPY" ? 3 : 5;
 
   // ── Indicators ────────────────────────────────────────────────────────────
   const ema20Arr = calculateEMA(closes, settings.ema1Period);
   const ema50Arr = calculateEMA(closes, settings.ema2Period);
-  const rsiArr = calculateRSI(closes, 14);
-  const macdArr = calculateMACD(closes);
-  const atrArr = calculateATR(candles, 14);
+  const rsiArr   = calculateRSI(closes, 14);
+  const macdArr  = calculateMACD(closes);
+  const atrArr   = calculateATR(candles, 14);
 
-  const ema20 = ema20Arr[len - 1];
-  const ema50 = ema50Arr[len - 1];
+  const ema20     = ema20Arr[len - 1];
+  const ema50     = ema50Arr[len - 1];
   const ema20Prev = ema20Arr[len - 2] ?? ema20;
   const ema50Prev = ema50Arr[len - 2] ?? ema50;
-  const rsi = rsiArr[len - 1];
-  const macd = macdArr[len - 1];
-  const macdPrev = macdArr[len - 2] ?? macd;
-  const atr = atrArr[len - 1];
+  const rsi       = rsiArr[len - 1];
+  const macd      = macdArr[len - 1];
+  const macdPrev  = macdArr[len - 2] ?? macd;
+  const atr       = atrArr[len - 1];
 
-  // Rolling average ATR (last 20)
+  // Rolling average ATR (last 20 bars)
   const validAtrs = atrArr.filter((v) => !isNaN(v)).slice(-20);
   const avgAtr = validAtrs.length > 0
     ? validAtrs.reduce((s, v) => s + v, 0) / validAtrs.length
     : atr;
 
-  // S/R
-  const sr = calculateSupportResistance(candles, 5, 5);
+  // Classic S/R (pivot-based)
+  const sr          = calculateSupportResistance(candles, 5, 5);
   const currentPrice = candles[len - 1].close;
-  const prevClose = candles[len - 2]?.close ?? currentPrice;
+  const prevClose    = candles[len - 2]?.close ?? currentPrice;
 
-  const iNearSupport = nearSupport(currentPrice, sr.support);
-  const iNearResistance = nearResistance(currentPrice, sr.resistance);
+  const iNearSupport     = nearSupport(currentPrice, sr.support);
+  const iNearResistance  = nearResistance(currentPrice, sr.resistance);
   const iBrokeResistance = brokeResistance(candles[len - 1], prevClose, sr.resistance);
-  const iBrokeSupport = brokeSupport(candles[len - 1], prevClose, sr.support);
+  const iBrokeSupport    = brokeSupport(candles[len - 1], prevClose, sr.support);
 
-  // Patterns
+  // Candlestick patterns
   const patterns = detectPatterns(candles, 3);
-  const highVol = isHighVolatility(candles, 14, settings.volatilityThreshold);
+  const highVol  = isHighVolatility(candles, 14, settings.volatilityThreshold);
+
+  // Supply & Demand zone analysis
+  const sd = analyzeSDZones(candles, 1.5);
 
   // ── Scoring ───────────────────────────────────────────────────────────────
   const scoreInput = {
@@ -151,19 +163,20 @@ export function runSignalEngine(
     rsi,
     macd, macdPrev,
     atr, avgAtr,
-    nearSupport: iNearSupport,
-    nearResistance: iNearResistance,
+    nearSupport:     iNearSupport,
+    nearResistance:  iNearResistance,
     brokeResistance: iBrokeResistance,
-    brokeSupport: iBrokeSupport,
+    brokeSupport:    iBrokeSupport,
     patterns,
+    sd,
     settings,
   };
 
-  const score = computeScoreBreakdown(scoreInput);
+  const score      = computeScoreBreakdown(scoreInput);
   const confidence = scoreToConfidence(score);
-  const signal = scoreToSignal(score.total, settings.minConfidence, confidence);
+  const signal     = scoreToSignal(score.total, settings.minConfidence, confidence);
 
-  // Determine trade direction
+  // Trade direction and ATR-based SL/TP
   const direction = score.total >= 0 ? "long" : "short";
   const setup = atrTradeSetup(candles, direction, settings.atrMultiplierSL, settings.atrMultiplierTP);
 
@@ -171,41 +184,44 @@ export function runSignalEngine(
   const patternLabels = patterns.map(patternLabel);
   const reasons = buildReasons(score, {
     ema20, ema50, rsi,
-    macdLine: macd.macdLine,
+    macdLine:   macd.macdLine,
     macdSignal: macd.signalLine,
-    nearSup: iNearSupport,
-    nearRes: iNearResistance,
-    brokRes: iBrokeResistance,
-    brokSup: iBrokeSupport,
+    nearSup:  iNearSupport,
+    nearRes:  iNearResistance,
+    brokRes:  iBrokeResistance,
+    brokSup:  iBrokeSupport,
     patterns: patternLabels,
     highVol,
+    sd,
+    decimals,
   });
 
   return {
     pair,
     timeframe,
-    timestamp: now,
+    timestamp:   now,
     signal,
     confidence,
     score,
     reasons,
     currentPrice,
-    entry: setup.entry,
-    stopLoss: setup.stopLoss,
-    takeProfit: setup.takeProfit,
-    riskReward: setup.riskReward,
-    atrValue: atr,
+    entry:       setup.entry,
+    stopLoss:    setup.stopLoss,
+    takeProfit:  setup.takeProfit,
+    riskReward:  setup.riskReward,
+    atrValue:    atr,
     indicators: {
       ema20,
       ema50,
       rsi,
-      macdLine: macd.macdLine,
-      signalLine: macd.signalLine,
-      histogram: macd.histogram,
+      macdLine:         macd.macdLine,
+      signalLine:       macd.signalLine,
+      histogram:        macd.histogram,
       atr,
-      supportLevels: sr.support,
+      supportLevels:    sr.support,
       resistanceLevels: sr.resistance,
       detectedPatterns: patternLabels,
+      sd,
     },
   };
 }

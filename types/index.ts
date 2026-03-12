@@ -49,17 +49,46 @@ export type PatternType =
   | "hammer"
   | "shooting_star";
 
+// ─── Supply & Demand Zones ───────────────────────────────────────────────────
+
+export type SDZoneStatus = "fresh" | "tested" | "broken";
+export type SDZoneType = "supply" | "demand";
+
+export interface SDZone {
+  type: SDZoneType;
+  top: number;
+  bottom: number;
+  /** 1 = weak (1.5–2× ATR impulse), 2 = moderate, 3 = strong (>3× ATR) */
+  strength: 1 | 2 | 3;
+  status: SDZoneStatus;
+  timeIndex: number;     // candle index where the impulse originated
+  impulseSize: number;   // impulse body as multiple of ATR
+}
+
+export interface SDAnalysis {
+  supplyZones: SDZone[];
+  demandZones: SDZone[];
+  inSupplyZone: boolean;
+  inDemandZone: boolean;
+  freshSupplyAbove: SDZone | null;
+  freshDemandBelow: SDZone | null;
+  nearFreshDemand: boolean;
+  nearFreshSupply: boolean;
+  sdScore: number;       // -2 to +2
+}
+
 // ─── Signal Engine ───────────────────────────────────────────────────────────
 
 export type SignalType = "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
 
 export interface ScoreBreakdown {
-  trendScore: number;       // -2 to +2
-  momentumScore: number;    // -2 to +2
-  breakoutScore: number;    // -2 to +2
+  trendScore: number;        // -2 to +2
+  momentumScore: number;     // -2 to +2
+  breakoutScore: number;     // -2 to +2
   volatilityPenalty: number; // 0 to -2
-  patternBonus: number;     // -1 to +1
-  total: number;            // sum
+  patternBonus: number;      // -1 to +1
+  sdScore: number;           // -2 to +2  (supply & demand zones)
+  total: number;             // sum of all dimensions
 }
 
 export interface SignalResult {

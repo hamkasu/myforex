@@ -1,4 +1,4 @@
-import type { AppSettings, MACDResult, ScoreBreakdown, SignalType } from "@/types";
+import type { AppSettings, MACDResult, ScoreBreakdown, SDAnalysis, SignalType } from "@/types";
 import type { CandlePattern } from "@/types";
 import { getRSIZone } from "@/lib/indicators/rsi";
 
@@ -17,6 +17,7 @@ export interface ScoringInput {
   brokeResistance: boolean;
   brokeSupport: boolean;
   patterns: CandlePattern[];
+  sd: SDAnalysis;
   settings: AppSettings;
 }
 
@@ -127,30 +128,43 @@ export function scoreToSignal(total: number, minConfidence: number, confidence: 
   return "HOLD";
 }
 
+/**
+ * Supply & Demand Zone Score (-2 to +2):
+ *  +2: Price inside a demand zone (strong buy area)
+ *  +1: Price approaching a fresh demand zone below
+ *  0:  No significant S&D context
+ *  -1: Price approaching a fresh supply zone above
+ *  -2: Price inside a supply zone (strong sell area)
+ */
+export function supplyDemandScore(sd: SDAnalysis): number {
+  return Math.max(-2, Math.min(2, sd.sdScore));
+}
+
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Max possible |score| is about 7 (2+2+2+0+1)
-  const maxScore = 7;
+  // Max possible |score| is now 9 (2+2+2+0+1+2)
+  const maxScore = 9;
   const raw = (score.total / maxScore) * 100;
-  // Confidence is always 0–100, higher for stronger signals
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
 
 export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
-  const trend = trendScore(input);
-  const momentum = momentumScore(input);
-  const breakout = breakoutScore(input);
+  const trend      = trendScore(input);
+  const momentum   = momentumScore(input);
+  const breakout   = breakoutScore(input);
   const volatility = volatilityPenalty(input);
-  const pattern = patternBonusScore(input.patterns);
+  const pattern    = patternBonusScore(input.patterns);
+  const sd         = supplyDemandScore(input.sd);
 
-  const total = trend + momentum + breakout + volatility + pattern;
+  const total = trend + momentum + breakout + volatility + pattern + sd;
 
   return {
-    trendScore: trend,
-    momentumScore: momentum,
-    breakoutScore: breakout,
+    trendScore:        trend,
+    momentumScore:     momentum,
+    breakoutScore:     breakout,
     volatilityPenalty: volatility,
-    patternBonus: pattern,
+    patternBonus:      pattern,
+    sdScore:           sd,
     total,
   };
 }

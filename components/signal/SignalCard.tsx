@@ -144,10 +144,11 @@ export default function SignalCard({ signal }: { signal: EngineOutput }) {
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
             Score Breakdown
           </div>
-          <ScoreRow label="Trend"      value={signal.score.trendScore} />
-          <ScoreRow label="Momentum"   value={signal.score.momentumScore} />
-          <ScoreRow label="Breakout"   value={signal.score.breakoutScore} />
-          <ScoreRow label="Pattern"    value={signal.score.patternBonus} max={1} />
+          <ScoreRow label="Trend"           value={signal.score.trendScore} />
+          <ScoreRow label="Momentum"        value={signal.score.momentumScore} />
+          <ScoreRow label="Breakout/S&R"    value={signal.score.breakoutScore} />
+          <ScoreRow label="Supply & Demand" value={signal.score.sdScore} />
+          <ScoreRow label="Pattern"         value={signal.score.patternBonus} max={1} />
           {signal.score.volatilityPenalty !== 0 && (
             <ScoreRow label="Volatility" value={signal.score.volatilityPenalty} />
           )}
