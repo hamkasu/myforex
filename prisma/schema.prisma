@@ -1,0 +1,102 @@
+// Forex Signal Analyzer — PostgreSQL schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  signals   Signal[]
+  backtests BacktestResult[]
+  settings  UserSettings?
+}
+
+// ─── Signal History ───────────────────────────────────────────────────────────
+
+model Signal {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Core signal fields
+  pair         String
+  timeframe    String
+  timestamp    BigInt             // unix seconds
+  signal       String             // STRONG_BUY | BUY | HOLD | SELL | STRONG_SELL
+  confidence   Int
+  score        Json               // ScoreBreakdown
+  reasons      String[]
+  currentPrice Float
+  entry        Float
+  stopLoss     Float
+  takeProfit   Float
+  riskReward   Float
+  atrValue     Float
+
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ─── Backtest Results ─────────────────────────────────────────────────────────
+
+model BacktestResult {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pair         String
+  timeframe    String
+  totalTrades  Int
+  wins         Int
+  losses       Int
+  winRate      Float
+  averageRR    Float
+  maxDrawdown  Float
+  profitFactor Float
+  totalR       Float
+  equityCurve  Float[]
+  runAt        BigInt             // unix millis
+
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ─── Per-User Settings ────────────────────────────────────────────────────────
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rsiOversold                Float   @default(30)
+  rsiOverbought              Float   @default(70)
+  rsiMomentumLow             Float   @default(50)
+  rsiMomentumHigh            Float   @default(70)
+  ema1Period                 Int     @default(20)
+  ema2Period                 Int     @default(50)
+  atrMultiplierSL            Float   @default(1.5)
+  atrMultiplierTP            Float   @default(2.5)
+  minConfidence              Int     @default(55)
+  trendWeight                Int     @default(2)
+  momentumWeight             Int     @default(2)
+  breakoutWeight             Int     @default(2)
+  patternWeight              Int     @default(1)
+  volatilityThreshold        Float   @default(2.5)
+  enableBrowserNotifications Boolean @default(false)
+  alertMinConfidence         Int     @default(65)
+}

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import SessionProvider from "@/components/providers/SessionProvider";
 
 export const metadata: Metadata = {
   title: "Forex Signal Analyzer",
@@ -51,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="bg-[#0a0e1a] text-slate-100 antialiased">
-        {children}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

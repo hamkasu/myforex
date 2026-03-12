@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { ForexPair, Timeframe, TabId, Candle, AppSettings } from "@/types";
+import type { ForexPair, Timeframe, TabId, Candle, AppSettings, StoredSignal } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { getCandles } from "@/lib/data/provider";
 import { runSignalEngine } from "@/lib/signals/signalEngine";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import {
-  getSettings, saveSettings, saveSignal, getSignalHistory,
+  getSettings, saveSettings,
+  saveSignal as lsSaveSignal,
+  getSignalHistory,
+  clearSignalHistory as lsClearSignalHistory,
   saveLastPair, saveLastTimeframe, getLastPair, getLastTimeframe,
   getLastTab, saveLastTab,
 } from "@/lib/storage/storage";
@@ -35,7 +40,50 @@ const CandlestickChart = dynamic(() => import("@/components/chart/CandlestickCha
   ),
 });
 
+// ── API helpers ──────────────────────────────────────────────────────────────
+
+async function apiGet<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) return fallback;
+    return res.json() as Promise<T>;
+  } catch {
+    return fallback;
+  }
+}
+
+async function apiPost(path: string, body: unknown): Promise<void> {
+  try {
+    await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch { /* offline — ignore */ }
+}
+
+async function apiPut(path: string, body: unknown): Promise<void> {
+  try {
+    await fetch(path, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch { /* offline — ignore */ }
+}
+
+async function apiDelete(path: string): Promise<void> {
+  try {
+    await fetch(path, { method: "DELETE" });
+  } catch { /* offline — ignore */ }
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
+
 export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
   const [pair, setPair] = useState<ForexPair>("EUR/USD");
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -44,21 +92,55 @@ export default function HomePage() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [signalHistory, setSignalHistory] = useState(getSignalHistory());
+  const [signalHistory, setSignalHistory] = useState<StoredSignal[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
 
-  // ── Load persisted preferences ─────────────────────────────────────────────
+  const isAuthed = status === "authenticated";
+
+  // ── Redirect unauthenticated users ────────────────────────────────────────
   useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/auth");
+    }
+  }, [status, router]);
+
+  // ── Load preferences (localStorage on mount, then merge API data) ─────────
+  useEffect(() => {
+    if (status === "loading") return;
+
+    // Always load from localStorage first for instant UI
     const savedPair = getLastPair() as ForexPair;
     const savedTF = getLastTimeframe() as Timeframe;
     const savedTab = getLastTab() as TabId;
-    const savedSettings = getSettings();
+    const localSettings = getSettings();
+    const localHistory = getSignalHistory();
 
     setPair(savedPair);
     setTimeframe(savedTF);
     setActiveTab(savedTab);
-    setSettings(savedSettings);
-  }, []);
+    setSettings(localSettings);
+    setSignalHistory(localHistory);
+    setHydrated(true);
+
+    // If authenticated, sync from PostgreSQL (overrides localStorage)
+    if (isAuthed) {
+      Promise.all([
+        apiGet<AppSettings>("/api/settings", localSettings),
+        apiGet<StoredSignal[]>("/api/signals", localHistory),
+      ]).then(([dbSettings, dbSignals]) => {
+        setSettings(dbSettings);
+        saveSettings(dbSettings); // keep localStorage in sync
+        setSignalHistory(dbSignals);
+        // Write-through to localStorage cache
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("fsa:signals", JSON.stringify(dbSignals));
+          } catch { /* quota */ }
+        }
+      });
+    }
+  }, [status, isAuthed]);
 
   // ── Online/offline detection ───────────────────────────────────────────────
   useEffect(() => {
@@ -76,6 +158,7 @@ export default function HomePage() {
 
   // ── Fetch candles + compute signal ────────────────────────────────────────
   const refresh = useCallback(async () => {
+    if (!hydrated) return;
     setLoading(true);
     try {
       const data = await getCandles(pair, timeframe);
@@ -87,12 +170,19 @@ export default function HomePage() {
 
       // Auto-save to history when signal is actionable
       if (result.signal !== "HOLD" && result.confidence >= settings.minConfidence) {
-        const stored = {
+        const stored: StoredSignal = {
           ...result,
           id: `${Date.now()}-${pair}-${timeframe}`,
         };
-        saveSignal(stored);
+
+        // Write to localStorage cache
+        lsSaveSignal(stored);
         setSignalHistory(getSignalHistory());
+
+        // Persist to PostgreSQL
+        if (isAuthed) {
+          await apiPost("/api/signals", stored);
+        }
 
         // Browser notification if enabled
         if (settings.enableBrowserNotifications) {
@@ -104,11 +194,11 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [pair, timeframe, settings]);
+  }, [pair, timeframe, settings, hydrated, isAuthed]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (hydrated) refresh();
+  }, [refresh, hydrated]);
 
   // ── Persist pair/timeframe/tab ────────────────────────────────────────────
   const handlePairChange = (p: ForexPair) => {
@@ -126,10 +216,32 @@ export default function HomePage() {
     saveLastTab(tab);
   };
 
-  const handleSettingsChange = (newSettings: AppSettings) => {
+  const handleSettingsChange = async (newSettings: AppSettings) => {
     setSettings(newSettings);
-    saveSettings(newSettings);
+    saveSettings(newSettings); // localStorage
+    if (isAuthed) {
+      await apiPut("/api/settings", newSettings); // PostgreSQL
+    }
   };
+
+  const handleHistoryClear = async () => {
+    lsClearSignalHistory(); // clear localStorage
+    setSignalHistory([]);
+    if (isAuthed) {
+      await apiDelete("/api/signals"); // clear PostgreSQL
+    }
+  };
+
+  // Show loading state while auth is resolving
+  if (status === "loading" || !hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0e1a]">
+        <span className="spin-slow inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") return null;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0e1a]">
@@ -170,7 +282,7 @@ export default function HomePage() {
                 pair={pair}
                 timeframe={timeframe}
                 onSettingsChange={handleSettingsChange}
-                onHistoryUpdate={() => setSignalHistory(getSignalHistory())}
+                onHistoryClear={handleHistoryClear}
               />
             </div>
 
@@ -215,17 +327,12 @@ export default function HomePage() {
                 pair={pair}
                 timeframe={timeframe}
                 onSettingsChange={handleSettingsChange}
-                onHistoryUpdate={() => setSignalHistory(getSignalHistory())}
+                onHistoryClear={handleHistoryClear}
               />
             )}
           </div>
         </div>
       </main>
-
-      {/* Desktop tab bar */}
-      <div className="hidden lg:flex border-b border-[#1e2d45] bg-[#111827] sticky top-0 z-10 px-6 -mt-4 mb-4 order-first">
-        {/* rendered inline in the sidebar layout above */}
-      </div>
 
       {/* Mobile bottom navigation */}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
@@ -239,22 +346,22 @@ interface TabContentProps {
   candles: Candle[];
   signal: EngineOutput | null;
   settings: AppSettings;
-  signalHistory: ReturnType<typeof getSignalHistory>;
+  signalHistory: StoredSignal[];
   pair: ForexPair;
   timeframe: Timeframe;
   onSettingsChange: (s: AppSettings) => void;
-  onHistoryUpdate: () => void;
+  onHistoryClear: () => void;
 }
 
 function TabContent({
   activeTab, candles, signal, settings, signalHistory,
-  pair, timeframe, onSettingsChange, onHistoryUpdate,
+  pair, timeframe, onSettingsChange, onHistoryClear,
 }: TabContentProps) {
   if (activeTab === "indicators" || activeTab === "overview") {
     return signal ? <IndicatorsPanel signal={signal} candles={candles} /> : null;
   }
   if (activeTab === "history") {
-    return <SignalHistory history={signalHistory} onClear={onHistoryUpdate} />;
+    return <SignalHistory history={signalHistory} onClear={onHistoryClear} />;
   }
   if (activeTab === "backtest") {
     return <BacktestPanel candles={candles} pair={pair} timeframe={timeframe} settings={settings} />;

@@ -5,6 +5,7 @@ import type { ForexPair, Timeframe } from "@/types";
 import { FOREX_PAIRS, TIMEFRAMES } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import { signalColor, signalLabel } from "@/components/signal/SignalCard";
+import UserMenu from "@/components/layout/UserMenu";
 import clsx from "clsx";
 
 interface TopBarProps {
@@ -46,7 +47,7 @@ export default function TopBar({
             </div>
           )}
 
-          {/* Refresh + last updated */}
+          {/* Refresh + last updated + user menu */}
           <div className="flex items-center gap-2">
             {lastUpdated && (
               <span className="text-xs text-slate-500 hidden md:block">
@@ -61,6 +62,7 @@ export default function TopBar({
             >
               <RefreshCw className={clsx("w-4 h-4", loading && "spin-slow")} />
             </button>
+            <UserMenu />
           </div>
         </div>
 
