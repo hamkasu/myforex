@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { StoredSignal } from "@/types";
 import { History, Trash2, Download } from "lucide-react";
-import { clearSignalHistory, exportSignalsCSV } from "@/lib/storage/storage";
+import { exportSignalsCSV } from "@/lib/storage/storage";
 import { signalColor, signalLabel } from "@/components/signal/SignalCard";
 import clsx from "clsx";
 
@@ -79,7 +79,6 @@ export default function SignalHistory({
 
   const handleClear = () => {
     if (confirming) {
-      clearSignalHistory();
       onClear();
       setConfirming(false);
     } else {
