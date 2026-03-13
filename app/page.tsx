@@ -21,6 +21,7 @@ import { sendBrowserNotification } from "@/lib/pwa/notifications";
 
 import TopBar from "@/components/layout/TopBar";
 import BottomNav from "@/components/layout/BottomNav";
+import DesktopTabs from "@/components/layout/DesktopTabs";
 import OfflineBanner from "@/components/layout/OfflineBanner";
 import SignalCard from "@/components/signal/SignalCard";
 import TradeSetupPanel from "@/components/signal/TradeSetupPanel";
@@ -273,6 +274,8 @@ export default function HomePage() {
                 signal={signal}
                 loading={loading}
               />
+
+              <DesktopTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
               <TabContent
                 activeTab={activeTab}
