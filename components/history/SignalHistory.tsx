@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { StoredSignal } from "@/types";
 import { History, Trash2, Download } from "lucide-react";
+import { fmtUnixDateTime } from "@/lib/utils/time";
 import { exportSignalsCSV } from "@/lib/storage/storage";
 import { signalColor, signalLabel } from "@/components/signal/SignalCard";
 import clsx from "clsx";
@@ -27,7 +28,7 @@ function SignalRow({ s }: { s: StoredSignal }) {
               {s.pair} · {s.timeframe}
             </div>
             <div className="text-xs text-slate-500">
-              {new Date(s.timestamp * 1000).toLocaleString()}
+              {fmtUnixDateTime(s.timestamp)}
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Candle, ForexPair } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import { calculateEMA } from "@/lib/indicators/ema";
+import { chartTimeFormatter, chartTickFormatter } from "@/lib/utils/time";
 
 interface CandlestickChartProps {
   candles: Candle[];
@@ -57,6 +58,10 @@ export default function CandlestickChart({
           timeVisible: true,
           secondsVisible: false,
           rightOffset: 5,
+          tickMarkFormatter: (time: number, type: number) => chartTickFormatter(time, type),
+        },
+        localization: {
+          timeFormatter: (time: number) => chartTimeFormatter(time),
         },
         handleScroll: { mouseWheel: true, pressedMouseMove: true },
         handleScale: { mouseWheel: true, pinch: true },
