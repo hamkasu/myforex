@@ -269,6 +269,7 @@ export default function HomePage() {
               <CandlestickChart
                 candles={candles}
                 pair={pair}
+                timeframe={timeframe}
                 signal={signal}
                 loading={loading}
               />
@@ -305,6 +306,7 @@ export default function HomePage() {
                 <CandlestickChart
                   candles={candles}
                   pair={pair}
+                  timeframe={timeframe}
                   signal={signal}
                   loading={loading}
                 />

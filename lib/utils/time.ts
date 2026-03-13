@@ -1,5 +1,6 @@
 // Malaysia Time = UTC+8. Manual offset avoids Intl.DateTimeFormat timezone
 // availability differences across browsers and Node builds.
+import type { Timeframe } from "@/types";
 
 const MYT_OFFSET_MS = 8 * 3600 * 1000;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -50,10 +51,16 @@ export const fmtUnixDate     = (ts: number) => fmtDate(new Date(ts * 1000));
 // ── lightweight-charts formatters ────────────────────────────────────────────
 // Both receive a UTCTimestamp (Unix seconds).
 
-/** Crosshair tooltip label — e.g. "03:00:00 PM" */
-export function chartTimeFormatter(time: number): string {
-  const { h12, m, s, ampm } = myt(time * 1000);
-  return `${pad(h12)}:${pad(m)}:${pad(s)} ${ampm}`;
+/** Crosshair tooltip label.
+ *  For daily timeframe: show "13 Mar 2026".
+ *  For intraday: show "03:00 PM". */
+export function chartTimeFormatter(time: number, timeframe?: Timeframe): string {
+  if (timeframe === "1d") {
+    const { day, mon, year } = myt(time * 1000);
+    return `${day} ${MONTHS[mon]} ${year}`;
+  }
+  const { h12, m, ampm } = myt(time * 1000);
+  return `${pad(h12)}:${pad(m)} ${ampm}`;
 }
 
 /**
