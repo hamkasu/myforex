@@ -3,7 +3,7 @@
  * Designed so IndexedDB can replace it later without changing call sites.
  */
 import type { StoredSignal, BacktestResult, AppSettings, AlertConfig } from "@/types";
-import { DEFAULT_SETTINGS, TIMEFRAMES } from "@/types";
+import { DEFAULT_SETTINGS, TIMEFRAMES, FOREX_PAIRS } from "@/types";
 
 const KEYS = {
   signals: "fsa:signals",
@@ -112,7 +112,8 @@ export function saveAlertConfig(configs: AlertConfig[]): void {
 // ─── UI Preferences ──────────────────────────────────────────────────────────
 
 export function getLastPair(): string {
-  return load<string>(KEYS.lastPair, "EUR/USD");
+  const p = load<string>(KEYS.lastPair, "EUR/USD");
+  return (FOREX_PAIRS as readonly string[]).includes(p) ? p : "EUR/USD";
 }
 
 export function saveLastPair(pair: string): void {

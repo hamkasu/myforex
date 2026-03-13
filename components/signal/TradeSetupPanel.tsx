@@ -2,6 +2,7 @@
 
 import type { ForexPair } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
+import { getPairDecimals, getPipFactor, getPipLabel } from "@/lib/utils/pairs";
 import { Target, Shield, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import clsx from "clsx";
 
@@ -12,7 +13,7 @@ function fmt(v: number, decimals: number) {
 }
 
 function pips(a: number, b: number, pair: ForexPair) {
-  return Math.abs(a - b) * (pair === "GBP/JPY" ? 100 : 10000);
+  return Math.abs(a - b) * getPipFactor(pair);
 }
 
 function rr(tpDist: number, slDist: number) {
@@ -27,6 +28,7 @@ function LevelRow({
   badge,
   price,
   pipDist,
+  pipLabel,
   rrRatio,
   decimals,
   color,
@@ -36,6 +38,7 @@ function LevelRow({
   badge?: string;
   price: number;
   pipDist?: number;
+  pipLabel?: string;
   rrRatio?: number;
   decimals: number;
   color: string;
@@ -60,7 +63,7 @@ function LevelRow({
       <div className="text-right shrink-0">
         {pipDist !== undefined && (
           <div className={clsx("price text-xs font-semibold", color)}>
-            {pipDist.toFixed(1)} pip
+            {pipDist.toFixed(1)} {pipLabel ?? "pips"}
           </div>
         )}
         {rrRatio !== undefined && (
@@ -153,7 +156,8 @@ export default function TradeSetupPanel({
   if (signal.signal === "HOLD") return null;
 
   const isBuy    = signal.signal === "BUY" || signal.signal === "STRONG_BUY";
-  const decimals = pair === "GBP/JPY" ? 3 : 5;
+  const decimals = getPairDecimals(pair);
+  const pipLbl   = getPipLabel(pair);
   const atr      = signal.atrValue;
   const entry    = signal.entry;
 
@@ -199,7 +203,7 @@ export default function TradeSetupPanel({
           <LevelRow
             label="Stop Loss"
             price={sl}
-            pipDist={slD}
+            pipDist={slD} pipLabel={pipLbl}
             decimals={decimals}
             color="text-red-400"
             dotColor="bg-red-500"
@@ -226,19 +230,19 @@ export default function TradeSetupPanel({
           {/* TP1 */}
           <LevelRow
             label="Target 1"  badge="Conservative"
-            price={tp1} pipDist={tp1D} rrRatio={rr(tp1D, slD)}
+            price={tp1} pipDist={tp1D} pipLabel={pipLbl} rrRatio={rr(tp1D, slD)}
             decimals={decimals} color="text-green-300/80" dotColor="bg-green-300/70"
           />
           {/* TP2 */}
           <LevelRow
             label="Target 2"  badge="Main"
-            price={tp2} pipDist={tp2D} rrRatio={rr(tp2D, slD)}
+            price={tp2} pipDist={tp2D} pipLabel={pipLbl} rrRatio={rr(tp2D, slD)}
             decimals={decimals} color="text-green-400" dotColor="bg-green-400"
           />
           {/* TP3 */}
           <LevelRow
             label="Target 3"  badge="Extended"
-            price={tp3} pipDist={tp3D} rrRatio={rr(tp3D, slD)}
+            price={tp3} pipDist={tp3D} pipLabel={pipLbl} rrRatio={rr(tp3D, slD)}
             decimals={decimals} color="text-emerald-400" dotColor="bg-emerald-400"
           />
         </div>

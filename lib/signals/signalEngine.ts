@@ -1,5 +1,6 @@
 import type { Candle, ForexPair, SDAnalysis, SignalResult, Timeframe, AppSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
+import { getPairDecimals } from "@/lib/utils/pairs";
 import { calculateEMA } from "@/lib/indicators/ema";
 import { calculateRSI } from "@/lib/indicators/rsi";
 import { calculateMACD } from "@/lib/indicators/macd";
@@ -130,7 +131,7 @@ export function runSignalEngine(
   const closes = candles.map((c) => c.close);
   const len = candles.length;
   const now = candles[len - 1].time;
-  const decimals = pair === "GBP/JPY" ? 3 : 5;
+  const decimals = getPairDecimals(pair);
 
   // ── Indicators ────────────────────────────────────────────────────────────
   const ema20Arr = calculateEMA(closes, settings.ema1Period);

@@ -11,10 +11,23 @@ export interface Candle {
 
 // ─── Forex Pairs & Timeframes ────────────────────────────────────────────────
 
-export type ForexPair = "EUR/USD" | "GBP/JPY";
+export type ForexPair =
+  // Major forex pairs
+  | "EUR/USD" | "GBP/USD" | "USD/JPY" | "GBP/JPY"
+  | "AUD/USD" | "USD/CAD" | "EUR/JPY" | "EUR/GBP"
+  // Commodities
+  | "XAU/USD"
+  // Stock indices
+  | "SPX500" | "NAS100" | "GER40";
+
 export type Timeframe = "1h" | "4h" | "1d";
 
-export const FOREX_PAIRS: ForexPair[] = ["EUR/USD", "GBP/JPY"];
+export const FOREX_PAIRS: ForexPair[] = [
+  "EUR/USD", "GBP/USD", "USD/JPY", "GBP/JPY",
+  "AUD/USD", "USD/CAD", "EUR/JPY", "EUR/GBP",
+  "XAU/USD",
+  "SPX500", "NAS100", "GER40",
+];
 export const TIMEFRAMES: Timeframe[] = ["1h", "4h", "1d"];
 
 // ─── Indicator Results ───────────────────────────────────────────────────────
