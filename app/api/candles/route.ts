@@ -44,9 +44,10 @@ function dateStr(d: Date): string {
 }
 
 async function fetchFromPolygon(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
-  // Massive.com is the rebranded Polygon.io (Oct 2025); accept either key name
-  const apiKey = process.env.MASSIVE_API_KEY ?? process.env.POLYGON_API_KEY;
-  if (!apiKey) throw new Error("MASSIVE_API_KEY not configured");
+  // Massive.com is the rebranded Polygon.io (Oct 2025); try both key names.
+  // POLYGON_API_KEY is checked first because the s_... Massive key may be stored there.
+  const apiKey = process.env.POLYGON_API_KEY ?? process.env.MASSIVE_API_KEY;
+  if (!apiKey) throw new Error("No API key configured (set MASSIVE_API_KEY or POLYGON_API_KEY)");
 
   const ticker = POLYGON_TICKER[pair];
   const { multiplier, timespan } = POLYGON_TF[timeframe];
@@ -109,7 +110,8 @@ function resample(candles: Candle[], tfHours: number): Candle[] {
 
 function loadStaticCandles(pair: ForexPair, timeframe: Timeframe): Candle[] {
   const filename = pair === "EUR/USD" ? "eurusd-1h.json" : "gbpjpy-1h.json";
-  const raw = fs.readFileSync(path.join(process.cwd(), "data", filename), "utf-8");
+  // In standalone build cwd is .next/standalone; public/ is copied there by postbuild
+  const raw = fs.readFileSync(path.join(process.cwd(), "public", "data", filename), "utf-8");
   return resample(JSON.parse(raw) as Candle[], TF_HOURS[timeframe]);
 }
 
