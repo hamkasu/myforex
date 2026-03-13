@@ -2,6 +2,7 @@
 
 import type { Candle, SDZone } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
+import { getPairDecimals } from "@/lib/utils/pairs";
 import { Activity, Layers } from "lucide-react";
 import clsx from "clsx";
 
@@ -181,7 +182,7 @@ export default function IndicatorsPanel({
   candles: Candle[];
 }) {
   const ind      = signal.indicators;
-  const decimals = signal.pair === "GBP/JPY" ? 3 : 5;
+  const decimals = getPairDecimals(signal.pair);
   const sd       = ind.sd;
 
   return (
