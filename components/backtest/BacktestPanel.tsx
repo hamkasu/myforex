@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import type { Candle, ForexPair, Timeframe, AppSettings, BacktestResult } from "@/types";
 import { runBacktest } from "@/lib/backtest/backtestEngine";
+import { fmtUnixDate, fmtDateTime } from "@/lib/utils/time";
 import { saveBacktestResult, getBacktestResults } from "@/lib/storage/storage";
 import { TestTube2, Play, TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
 import clsx from "clsx";
@@ -219,7 +220,7 @@ export default function BacktestPanel({
                       {t.direction === "long" ? "▲" : "▼"} {t.direction.toUpperCase()}
                     </span>
                     <span className="price text-slate-400">
-                      {new Date(t.entryTime * 1000).toLocaleDateString()}
+                      {fmtUnixDate(t.entryTime)}
                     </span>
                     <span className={clsx(
                       "price font-bold",
@@ -235,7 +236,7 @@ export default function BacktestPanel({
 
           <p className="text-xs text-slate-500 italic">
             Backtest results are simulated and do not guarantee future performance.
-            Run at: {new Date(current.runAt).toLocaleString()}
+            Run at: {fmtDateTime(new Date(current.runAt))}
           </p>
         </div>
       )}

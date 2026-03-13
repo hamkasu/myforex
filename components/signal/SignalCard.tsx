@@ -3,6 +3,7 @@
 import type { SignalType } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
+import { fmtUnixTime } from "@/lib/utils/time";
 import clsx from "clsx";
 
 // Exported helpers used by TopBar and others
@@ -130,7 +131,7 @@ export default function SignalCard({ signal }: { signal: EngineOutput }) {
             {signal.currentPrice.toFixed(signal.pair === "GBP/JPY" ? 3 : 5)}
           </div>
           <div className="text-xs text-slate-400">
-            {new Date(signal.timestamp * 1000).toLocaleTimeString()}
+            {fmtUnixTime(signal.timestamp)}
           </div>
         </div>
       </div>

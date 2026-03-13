@@ -1,6 +1,7 @@
 "use client";
 
 import { RefreshCw, TrendingUp } from "lucide-react";
+import { fmtTime } from "@/lib/utils/time";
 import type { ForexPair, Timeframe } from "@/types";
 import { FOREX_PAIRS, TIMEFRAMES } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
@@ -51,7 +52,7 @@ export default function TopBar({
           <div className="flex items-center gap-2">
             {lastUpdated && (
               <span className="text-xs text-slate-500 hidden md:block">
-                {lastUpdated.toLocaleTimeString()}
+                {fmtTime(lastUpdated)}
               </span>
             )}
             <button
