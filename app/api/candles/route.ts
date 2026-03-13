@@ -4,16 +4,7 @@ import fs from "fs";
 import type { ForexPair, Timeframe, Candle } from "@/types";
 
 const VALID_PAIRS: ForexPair[] = ["EUR/USD", "GBP/JPY"];
-const VALID_TIMEFRAMES: Timeframe[] = ["5m", "15m", "1h", "4h", "1d"];
-
-// Twelve Data interval names
-const TD_INTERVAL: Record<Timeframe, string> = {
-  "5m": "5min",
-  "15m": "15min",
-  "1h": "1h",
-  "4h": "4h",
-  "1d": "1day",
-};
+const VALID_TIMEFRAMES: Timeframe[] = ["1h", "4h", "1d"];
 
 // How long to cache each timeframe (matches the candle period)
 const CACHE_TTL_MS: Record<Timeframe, number> = {
@@ -27,41 +18,71 @@ const CACHE_TTL_MS: Record<Timeframe, number> = {
 // Server-side in-memory cache — shared across all requests in the same container
 const cache = new Map<string, { candles: Candle[]; fetchedAt: number }>();
 
-// ── Twelve Data ───────────────────────────────────────────────────────────────
+// ── Polygon.io ────────────────────────────────────────────────────────────────
 
-async function fetchFromTwelveData(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) throw new Error("TWELVE_DATA_API_KEY not configured");
+// Polygon forex tickers use C: prefix
+const POLYGON_TICKER: Record<ForexPair, string> = {
+  "EUR/USD": "C:EURUSD",
+  "GBP/JPY": "C:GBPJPY",
+};
+
+// multiplier + timespan for Polygon /v2/aggs/ticker endpoint
+const POLYGON_TF: Record<Timeframe, { multiplier: number; timespan: string }> = {
+  "1h":  { multiplier: 1,  timespan: "hour" },
+  "4h":  { multiplier: 4,  timespan: "hour" },
+  "1d":  { multiplier: 1,  timespan: "day"  },
+};
+
+// How many calendar days to look back to guarantee ~200 candles
+// (extra buffer for weekends / market-closed periods)
+const LOOKBACK_DAYS: Record<Timeframe, number> = {
+  "1h":  18,
+  "4h":  60,
+  "1d":  320,
+};
+
+function dateStr(d: Date): string {
+  return d.toISOString().split("T")[0]; // "YYYY-MM-DD"
+}
+
+async function fetchFromPolygon(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) throw new Error("POLYGON_API_KEY not configured");
+
+  const ticker = POLYGON_TICKER[pair];
+  const { multiplier, timespan } = POLYGON_TF[timeframe];
+
+  const to   = new Date();
+  const from = new Date(Date.now() - LOOKBACK_DAYS[timeframe] * 24 * 3600 * 1000);
 
   const url =
-    `https://api.twelvedata.com/time_series` +
-    `?symbol=${encodeURIComponent(pair)}` +
-    `&interval=${TD_INTERVAL[timeframe]}` +
-    `&outputsize=200` +
-    `&apikey=${apiKey}`;
+    `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${multiplier}/${timespan}` +
+    `/${dateStr(from)}/${dateStr(to)}` +
+    `?adjusted=false&sort=asc&limit=200&apiKey=${apiKey}`;
 
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Twelve Data HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Polygon HTTP ${res.status}`);
 
   const data = await res.json();
-  if (data.status === "error") throw new Error(`Twelve Data: ${data.message}`);
-  if (!Array.isArray(data.values)) throw new Error("Unexpected Twelve Data response");
+  if (data.status === "ERROR") throw new Error(`Polygon: ${data.error ?? data.message}`);
+  if (!Array.isArray(data.results) || data.results.length === 0)
+    throw new Error("Polygon returned no results");
 
-  // API returns newest-first; reverse to oldest-first for charting
-  return (data.values as Record<string, string>[]).reverse().map((v) => ({
-    time: Math.floor(new Date(v.datetime.replace(" ", "T") + "Z").getTime() / 1000),
-    open:  parseFloat(v.open),
-    high:  parseFloat(v.high),
-    low:   parseFloat(v.low),
-    close: parseFloat(v.close),
-    volume: v.volume ? parseInt(v.volume) : undefined,
+  // Polygon timestamps are in milliseconds UTC; convert to seconds
+  return (data.results as Record<string, number>[]).map((v) => ({
+    time:   Math.floor(v.t / 1000),
+    open:   v.o,
+    high:   v.h,
+    low:    v.l,
+    close:  v.c,
+    volume: v.v || undefined,
   }));
 }
 
 // ── Static fallback ───────────────────────────────────────────────────────────
 
 const TF_HOURS: Record<Timeframe, number> = {
-  "5m": 1 / 12, "15m": 1 / 4, "1h": 1, "4h": 4, "1d": 24,
+  "1h": 1, "4h": 4, "1d": 24,
 };
 
 function resample(candles: Candle[], tfHours: number): Candle[] {
@@ -97,8 +118,8 @@ function loadStaticCandles(pair: ForexPair, timeframe: Timeframe): Candle[] {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const pair       = searchParams.get("pair") as ForexPair;
-  const timeframe  = (searchParams.get("timeframe") ?? "1h") as Timeframe;
+  const pair      = searchParams.get("pair") as ForexPair;
+  const timeframe = (searchParams.get("timeframe") ?? "1h") as Timeframe;
 
   if (!VALID_PAIRS.includes(pair))
     return NextResponse.json({ error: "Invalid pair" }, { status: 400 });
@@ -114,15 +135,15 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Fetch live data from Twelve Data
+  // Fetch live data from Polygon.io
   try {
-    const candles = await fetchFromTwelveData(pair, timeframe);
+    const candles = await fetchFromPolygon(pair, timeframe);
     cache.set(cacheKey, { candles, fetchedAt: Date.now() });
     return NextResponse.json(candles, {
-      headers: { "X-Cache": "MISS", "X-Data-Source": "twelvedata", "Cache-Control": "no-store" },
+      headers: { "X-Cache": "MISS", "X-Data-Source": "polygon", "Cache-Control": "no-store" },
     });
   } catch (liveErr) {
-    console.error("[candles] live fetch failed, using static fallback:", liveErr);
+    console.error("[candles] Polygon fetch failed, using static fallback:", liveErr);
   }
 
   // Fallback to bundled static data
