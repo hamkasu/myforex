@@ -5,7 +5,8 @@ import type { Candle, ForexPair, Timeframe, AppSettings, BacktestResult } from "
 import { runBacktest } from "@/lib/backtest/backtestEngine";
 import { fmtUnixDate, fmtDateTime } from "@/lib/utils/time";
 import { saveBacktestResult, getBacktestResults } from "@/lib/storage/storage";
-import { TestTube2, Play, TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
+import { TestTube2, Play, TrendingUp, TrendingDown, BarChart2, Target } from "lucide-react";
+import type { ConfidenceBand } from "@/types";
 import clsx from "clsx";
 
 function StatBox({
@@ -21,6 +22,73 @@ function StatBox({
     <div className="bg-[#0a0e1a] rounded-lg p-3 text-center">
       <div className="text-xs text-slate-500 mb-1">{label}</div>
       <div className={clsx("price text-base font-bold", color ?? "text-white")}>{value}</div>
+    </div>
+  );
+}
+
+function CalibrationChart({ bands }: { bands: ConfidenceBand[] }) {
+  const active = bands.filter((b) => b.trades > 0);
+  if (active.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+        <Target className="w-3 h-3" /> Confidence Calibration
+        <span className="text-slate-600 ml-1">— does higher confidence = higher win rate?</span>
+      </div>
+      <div className="space-y-2">
+        {bands.map((b) => {
+          const isEmpty = b.trades === 0;
+          const wr = b.winRate * 100;
+          // Color: green if win rate > 50%, yellow if 40–50%, red below
+          const barColor = isEmpty ? "bg-slate-700"
+            : wr >= 50 ? "bg-green-500"
+            : wr >= 40 ? "bg-yellow-500"
+            : "bg-red-500";
+
+          return (
+            <div key={b.label}>
+              <div className="flex justify-between text-xs mb-0.5">
+                <span className="text-slate-400 w-16">{b.label}</span>
+                {isEmpty ? (
+                  <span className="text-slate-600 italic">no trades</span>
+                ) : (
+                  <span className="flex gap-3">
+                    <span className="text-slate-500">{b.trades} trades</span>
+                    <span className={clsx(
+                      "font-medium",
+                      wr >= 50 ? "text-green-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                    )}>
+                      {wr.toFixed(0)}% WR
+                    </span>
+                    <span className={clsx(
+                      "price font-medium",
+                      b.avgR >= 0 ? "text-green-400" : "text-red-400"
+                    )}>
+                      {b.avgR >= 0 ? "+" : ""}{b.avgR.toFixed(2)}R avg
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="h-1.5 bg-[#1e2d45] rounded-full overflow-hidden">
+                <div
+                  className={clsx("h-full rounded-full transition-all", barColor)}
+                  style={{ width: isEmpty ? "0%" : `${wr}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* 50% reference line label */}
+      <div className="flex mt-1">
+        <div className="w-16" />
+        <div className="flex-1 relative">
+          <div className="absolute left-1/2 -translate-x-1/2 text-[10px] text-slate-600">
+            ← 50% break-even →
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -202,6 +270,9 @@ export default function BacktestPanel({
 
           {/* Equity curve */}
           <EquityCurve data={current.equityCurve} />
+
+          {/* Confidence calibration */}
+          <CalibrationChart bands={current.calibration} />
 
           {/* Last few trades */}
           {current.trades.length > 0 && (

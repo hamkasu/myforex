@@ -152,6 +152,16 @@ export interface BacktestTrade {
   confidence: number;
 }
 
+export interface ConfidenceBand {
+  label: string;        // e.g. "55–64%"
+  minConf: number;      // inclusive lower bound (0–100)
+  maxConf: number;      // exclusive upper bound (0–100)
+  trades: number;
+  wins: number;
+  winRate: number;      // 0–1
+  avgR: number;         // average pnlR
+}
+
 export interface BacktestResult {
   pair: ForexPair;
   timeframe: Timeframe;
@@ -164,6 +174,7 @@ export interface BacktestResult {
   profitFactor: number;
   totalR: number;
   equityCurve: number[];     // cumulative R
+  calibration: ConfidenceBand[];
   trades: BacktestTrade[];
   runAt: number;             // timestamp
 }
