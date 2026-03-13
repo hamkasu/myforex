@@ -4,7 +4,7 @@ import fs from "fs";
 import type { ForexPair, Timeframe, Candle } from "@/types";
 
 const VALID_PAIRS: ForexPair[] = ["EUR/USD", "GBP/JPY"];
-const VALID_TIMEFRAMES: Timeframe[] = ["5m", "15m", "1h", "4h", "1d"];
+const VALID_TIMEFRAMES: Timeframe[] = ["1h", "4h", "1d"];
 
 // How long to cache each timeframe (matches the candle period)
 const CACHE_TTL_MS: Record<Timeframe, number> = {
@@ -28,18 +28,14 @@ const POLYGON_TICKER: Record<ForexPair, string> = {
 
 // multiplier + timespan for Polygon /v2/aggs/ticker endpoint
 const POLYGON_TF: Record<Timeframe, { multiplier: number; timespan: string }> = {
-  "5m":  { multiplier: 5,  timespan: "minute" },
-  "15m": { multiplier: 15, timespan: "minute" },
-  "1h":  { multiplier: 1,  timespan: "hour"   },
-  "4h":  { multiplier: 4,  timespan: "hour"   },
-  "1d":  { multiplier: 1,  timespan: "day"    },
+  "1h":  { multiplier: 1,  timespan: "hour" },
+  "4h":  { multiplier: 4,  timespan: "hour" },
+  "1d":  { multiplier: 1,  timespan: "day"  },
 };
 
 // How many calendar days to look back to guarantee ~200 candles
 // (extra buffer for weekends / market-closed periods)
 const LOOKBACK_DAYS: Record<Timeframe, number> = {
-  "5m":  4,
-  "15m": 7,
   "1h":  18,
   "4h":  60,
   "1d":  320,
@@ -86,7 +82,7 @@ async function fetchFromPolygon(pair: ForexPair, timeframe: Timeframe): Promise<
 // ── Static fallback ───────────────────────────────────────────────────────────
 
 const TF_HOURS: Record<Timeframe, number> = {
-  "5m": 1 / 12, "15m": 1 / 4, "1h": 1, "4h": 4, "1d": 24,
+  "1h": 1, "4h": 4, "1d": 24,
 };
 
 function resample(candles: Candle[], tfHours: number): Candle[] {
