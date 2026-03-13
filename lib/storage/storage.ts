@@ -3,7 +3,7 @@
  * Designed so IndexedDB can replace it later without changing call sites.
  */
 import type { StoredSignal, BacktestResult, AppSettings, AlertConfig } from "@/types";
-import { DEFAULT_SETTINGS } from "@/types";
+import { DEFAULT_SETTINGS, TIMEFRAMES } from "@/types";
 
 const KEYS = {
   signals: "fsa:signals",
@@ -120,7 +120,9 @@ export function saveLastPair(pair: string): void {
 }
 
 export function getLastTimeframe(): string {
-  return load<string>(KEYS.lastTimeframe, "1h");
+  const tf = load<string>(KEYS.lastTimeframe, "1h");
+  // Guard against stale values (e.g. "5m"/"15m" removed in a past release)
+  return (TIMEFRAMES as readonly string[]).includes(tf) ? tf : "1h";
 }
 
 export function saveLastTimeframe(tf: string): void {
