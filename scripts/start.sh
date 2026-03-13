@@ -1,14 +1,13 @@
 #!/bin/bash
 set -e
 
-# Resolve any failed migrations so deploy can proceed.
-# This handles the P3009 error when a previous migration attempt was interrupted.
-FAILED=$(npx prisma migrate status 2>&1 | grep -oP 'The `\K[^`]+(?=` migration)' || true)
+# Mark the known failed migration as rolled-back so migrate deploy can re-apply it.
+# Safe to run repeatedly: no-ops if the migration is not in a failed state.
+echo "==> Resolving any failed migrations..."
+npx prisma migrate resolve --rolled-back "0001_init" 2>&1 || true
 
-for migration in $FAILED; do
-  echo "Resolving failed migration: $migration"
-  npx prisma migrate resolve --rolled-back "$migration" || true
-done
-
+echo "==> Running migrations..."
 npx prisma migrate deploy
-HOSTNAME=0.0.0.0 node .next/standalone/server.js
+
+echo "==> Starting server..."
+HOSTNAME=0.0.0.0 exec node .next/standalone/server.js
