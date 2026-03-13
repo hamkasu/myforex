@@ -200,10 +200,102 @@ export default function SignalCard({ signal }: { signal: EngineOutput }) {
           </div>
         )}
 
+        {/* When to Long / Short */}
+        <WhenToTrade signal={signal} />
+
         {/* Disclaimer */}
         <p className="text-xs text-slate-500 italic">
           ⚠ Educational tool only. Not financial advice.
         </p>
+      </div>
+    </div>
+  );
+}
+
+// ── When to Long / When to Short ─────────────────────────────────────────────
+
+interface Condition { label: string; met: boolean }
+
+function ConditionList({ conditions, color }: { conditions: Condition[]; color: "green" | "red" }) {
+  return (
+    <>
+      {conditions.map((c, i) => (
+        <div key={i} className="flex items-start gap-2 text-xs">
+          <span className={clsx(
+            "mt-px font-bold shrink-0",
+            c.met
+              ? color === "green" ? "text-green-400" : "text-red-400"
+              : "text-slate-600"
+          )}>
+            {c.met ? "✓" : "✗"}
+          </span>
+          <span className={c.met ? "text-slate-200" : "text-slate-500"}>{c.label}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function WhenToTrade({ signal }: { signal: EngineOutput }) {
+  const { indicators: ind, score } = signal;
+  const rsi = isNaN(ind.rsi) ? 50 : ind.rsi;
+  const macdBull = ind.macdLine > ind.signalLine;
+
+  const longConditions: Condition[] = [
+    { label: "Uptrend active — EMA20 above EMA50",         met: score.trendScore > 0 },
+    { label: "RSI building strength (40–70)",              met: rsi >= 40 && rsi < 70 },
+    { label: "MACD bullish — above signal line",           met: macdBull },
+    { label: "At support or broke above resistance",       met: score.breakoutScore > 0 },
+    { label: "Price in demand zone",                       met: score.sdScore > 0 },
+  ];
+
+  const shortConditions: Condition[] = [
+    { label: "Downtrend active — EMA20 below EMA50",       met: score.trendScore < 0 },
+    { label: "RSI showing weakness (30–60)",               met: rsi > 30 && rsi <= 60 },
+    { label: "MACD bearish — below signal line",           met: !macdBull },
+    { label: "At resistance or broke below support",       met: score.breakoutScore < 0 },
+    { label: "Price in supply zone",                       met: score.sdScore < 0 },
+  ];
+
+  const longMet  = longConditions.filter(c => c.met).length;
+  const shortMet = shortConditions.filter(c => c.met).length;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+        When to Trade
+      </div>
+
+      {/* Long */}
+      <div className="rounded-lg bg-green-600/10 border border-green-600/20 p-3 space-y-1.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-green-400">
+            <TrendingUp className="w-3.5 h-3.5" /> GO LONG (BUY)
+          </span>
+          <span className={clsx(
+            "text-xs font-medium",
+            longMet >= 4 ? "text-green-300" : longMet >= 2 ? "text-yellow-400" : "text-slate-500"
+          )}>
+            {longMet}/{longConditions.length} met
+          </span>
+        </div>
+        <ConditionList conditions={longConditions} color="green" />
+      </div>
+
+      {/* Short */}
+      <div className="rounded-lg bg-red-600/10 border border-red-600/20 p-3 space-y-1.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-red-400">
+            <TrendingDown className="w-3.5 h-3.5" /> GO SHORT (SELL)
+          </span>
+          <span className={clsx(
+            "text-xs font-medium",
+            shortMet >= 4 ? "text-red-300" : shortMet >= 2 ? "text-yellow-400" : "text-slate-500"
+          )}>
+            {shortMet}/{shortConditions.length} met
+          </span>
+        </div>
+        <ConditionList conditions={shortConditions} color="red" />
       </div>
     </div>
   );
