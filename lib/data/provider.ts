@@ -72,37 +72,17 @@ export function interpolateCandles(candles: Candle[], timeframe: Timeframe): Can
   return result;
 }
 
-// ─── Sample Data Provider ────────────────────────────────────────────────────
-
-let cachedEURUSD: Candle[] | null = null;
-let cachedGBPJPY: Candle[] | null = null;
-
-async function loadBaseCandles(pair: ForexPair): Promise<Candle[]> {
-  if (pair === "EUR/USD") {
-    if (!cachedEURUSD) {
-      const res = await fetch("/data/eurusd-1h.json");
-      cachedEURUSD = await res.json();
-    }
-    return cachedEURUSD!;
-  } else {
-    if (!cachedGBPJPY) {
-      const res = await fetch("/data/gbpjpy-1h.json");
-      cachedGBPJPY = await res.json();
-    }
-    return cachedGBPJPY!;
-  }
-}
+// ─── Default Data Provider (calls server-side /api/candles) ─────────────────
 
 export const sampleDataProvider: DataProvider = {
-  getName: () => "Sample Data (Local)",
+  getName: () => "Live Market Data",
 
   async getCandles(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
-    const base = await loadBaseCandles(pair);
-
-    if (timeframe === "5m" || timeframe === "15m") {
-      return interpolateCandles(base, timeframe);
-    }
-    return resampleCandles(base, timeframe);
+    const res = await fetch(
+      `/api/candles?pair=${encodeURIComponent(pair)}&timeframe=${timeframe}`
+    );
+    if (!res.ok) throw new Error(`candles API error: ${res.status}`);
+    return res.json() as Promise<Candle[]>;
   },
 };
 
