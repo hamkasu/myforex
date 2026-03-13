@@ -4,6 +4,7 @@ import type {
   Timeframe,
   BacktestTrade,
   BacktestResult,
+  ConfidenceBand,
   AppSettings,
 } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
@@ -137,6 +138,27 @@ export function runBacktest(
   const totalR = trades.reduce((s, t) => s + t.pnlR, 0);
   const avgRR = totalTrades > 0 ? totalR / totalTrades : 0;
 
+  // ── Confidence Calibration ─────────────────────────────────────────────────
+  const BANDS: Array<[string, number, number]> = [
+    ["55–64%",  55, 65],
+    ["65–74%",  65, 75],
+    ["75–84%",  75, 85],
+    ["85–100%", 85, 101],
+  ];
+  const calibration: ConfidenceBand[] = BANDS.map(([label, lo, hi]) => {
+    const bt = trades.filter((t) => t.confidence >= lo && t.confidence < hi);
+    const bw = bt.filter((t) => t.outcome === "win").length;
+    return {
+      label,
+      minConf: lo,
+      maxConf: hi,
+      trades: bt.length,
+      wins: bw,
+      winRate: bt.length > 0 ? bw / bt.length : 0,
+      avgR: bt.length > 0 ? bt.reduce((s, t) => s + t.pnlR, 0) / bt.length : 0,
+    };
+  });
+
   return {
     pair,
     timeframe,
@@ -149,6 +171,7 @@ export function runBacktest(
     profitFactor,
     totalR,
     equityCurve,
+    calibration,
     trades,
     runAt: Date.now(),
   };

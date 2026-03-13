@@ -34,6 +34,7 @@ export async function GET() {
     profitFactor: r.profitFactor,
     totalR:       r.totalR,
     equityCurve:  r.equityCurve,
+    calibration:  [],   // not persisted — recomputed client-side
     runAt:        Number(r.runAt),
     trades:       [],   // not persisted — too large
   }));
