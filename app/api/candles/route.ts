@@ -112,7 +112,15 @@ function loadStaticCandles(pair: ForexPair, timeframe: Timeframe): Candle[] {
   const filename = pair === "EUR/USD" ? "eurusd-1h.json" : "gbpjpy-1h.json";
   // In standalone build cwd is .next/standalone; public/ is copied there by postbuild
   const raw = fs.readFileSync(path.join(process.cwd(), "public", "data", filename), "utf-8");
-  return resample(JSON.parse(raw) as Candle[], TF_HOURS[timeframe]);
+  const candles = resample(JSON.parse(raw) as Candle[], TF_HOURS[timeframe]);
+
+  // Shift timestamps forward so the last candle aligns with "now".
+  // Static files have a fixed creation date; shifting keeps the chart looking current.
+  if (candles.length === 0) return candles;
+  const periodSec = TF_HOURS[timeframe] * 3600;
+  const targetLast = Math.floor(Date.now() / 1000 / periodSec) * periodSec - periodSec;
+  const shift = targetLast - candles[candles.length - 1].time;
+  return shift === 0 ? candles : candles.map((c) => ({ ...c, time: c.time + shift }));
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────

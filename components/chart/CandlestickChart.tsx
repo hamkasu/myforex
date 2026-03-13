@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Candle, ForexPair } from "@/types";
+import type { Candle, ForexPair, Timeframe } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import { calculateEMA } from "@/lib/indicators/ema";
 import { chartTimeFormatter, chartTickFormatter } from "@/lib/utils/time";
@@ -9,12 +9,13 @@ import { chartTimeFormatter, chartTickFormatter } from "@/lib/utils/time";
 interface CandlestickChartProps {
   candles: Candle[];
   pair: ForexPair;
+  timeframe: Timeframe;
   signal: EngineOutput | null;
   loading: boolean;
 }
 
 export default function CandlestickChart({
-  candles, pair, signal, loading,
+  candles, pair, timeframe, signal, loading,
 }: CandlestickChartProps) {
   const containerRef    = useRef<HTMLDivElement>(null);
   const chartRef        = useRef<any>(null);
@@ -55,13 +56,13 @@ export default function CandlestickChart({
         },
         timeScale: {
           borderColor: "#1e2d45",
-          timeVisible: true,
+          timeVisible: timeframe !== "1d",
           secondsVisible: false,
           rightOffset: 5,
           tickMarkFormatter: (time: number, type: number) => chartTickFormatter(time, type),
         },
         localization: {
-          timeFormatter: (time: number) => chartTimeFormatter(time),
+          timeFormatter: (time: number) => chartTimeFormatter(time, timeframe),
         },
         handleScroll: { mouseWheel: true, pressedMouseMove: true },
         handleScale: { mouseWheel: true, pinch: true },
