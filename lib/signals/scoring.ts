@@ -19,6 +19,16 @@ export interface ScoringInput {
   patterns: CandlePattern[];
   sd: SDAnalysis;
   settings: AppSettings;
+  // New indicators
+  adx: number;
+  plusDI: number;
+  minusDI: number;
+  bbPercentB: number;
+  bbWidth: number;
+  stochK: number;
+  stochD: number;
+  stochKPrev: number;
+  stochDPrev: number;
 }
 
 /**
@@ -71,6 +81,19 @@ export function momentumScore(input: ScoringInput): number {
     if (macd.histogram > 0 && macd.histogram > macdPrev.histogram) score += 0.5;
     // Histogram growing bearish
     if (macd.histogram < 0 && macd.histogram < macdPrev.histogram) score -= 0.5;
+  }
+
+  // Stochastic confirmation
+  const { stochK, stochD, stochKPrev, stochDPrev } = input;
+  if (!isNaN(stochK) && !isNaN(stochD)) {
+    // Bullish cross in oversold zone
+    if (stochK > stochD && stochKPrev <= stochDPrev && stochK < 50) score += 0.5;
+    // Bearish cross in overbought zone
+    if (stochK < stochD && stochKPrev >= stochDPrev && stochK > 50) score -= 0.5;
+    // Deep oversold
+    if (stochK < 20 && stochD < 20) score += 0.5;
+    // Deep overbought
+    if (stochK > 80 && stochD > 80) score -= 0.5;
   }
 
   return Math.max(-2, Math.min(2, score));
@@ -140,10 +163,47 @@ export function supplyDemandScore(sd: SDAnalysis): number {
   return Math.max(-2, Math.min(2, sd.sdScore));
 }
 
+/**
+ * ADX Score (-1 to +1):
+ *  +1: ADX > 25 (trending market — trust EMA/MACD direction signals)
+ *   0: ADX 20–25 (developing trend)
+ *  -1: ADX < 20 (ranging market — trend signals less reliable)
+ */
+export function adxScore(adx: number): number {
+  if (isNaN(adx)) return 0;
+  if (adx > 25) return 1;
+  if (adx < 20) return -1;
+  return 0;
+}
+
+/**
+ * Bollinger Band Score (-2 to +2):
+ *  Based on %B (price position within the bands):
+ *  < 0   → below lower band (oversold extension)           +2
+ *  0–0.1 → near lower band (potential support/bounce)      +1
+ *  0.9–1 → near upper band (potential resistance/rejection) -1
+ *  > 1   → above upper band (overbought extension)         -2
+ *  Squeeze (very narrow bands): -1 modifier (uncertainty)
+ */
+export function bbScore(percentB: number, bbWidth: number): number {
+  if (isNaN(percentB)) return 0;
+  let score = 0;
+
+  if (percentB < 0)    score = 2;   // below lower band — oversold
+  else if (percentB <= 0.1) score = 1;  // near lower band
+  else if (percentB >= 1)   score = -2; // above upper band — overbought
+  else if (percentB >= 0.9) score = -1; // near upper band
+
+  // Squeeze penalty: very narrow bands signal uncertainty (breakout could go either way)
+  if (!isNaN(bbWidth) && bbWidth < 0.003) score -= 1;
+
+  return Math.max(-2, Math.min(2, score));
+}
+
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Max possible |score| is now 9 (2+2+2+0+1+2)
-  const maxScore = 9;
+  // Max possible |score|: 2+2+2+2+1+1+2 = 12
+  const maxScore = 12;
   const raw = (score.total / maxScore) * 100;
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
@@ -155,8 +215,10 @@ export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
   const volatility = volatilityPenalty(input);
   const pattern    = patternBonusScore(input.patterns);
   const sd         = supplyDemandScore(input.sd);
+  const adx        = adxScore(input.adx);
+  const bb         = bbScore(input.bbPercentB, input.bbWidth);
 
-  const total = trend + momentum + breakout + volatility + pattern + sd;
+  const total = trend + momentum + breakout + volatility + pattern + sd + adx + bb;
 
   return {
     trendScore:        trend,
@@ -165,6 +227,8 @@ export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
     volatilityPenalty: volatility,
     patternBonus:      pattern,
     sdScore:           sd,
+    adxScore:          adx,
+    bbScore:           bb,
     total,
   };
 }

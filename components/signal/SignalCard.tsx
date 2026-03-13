@@ -149,6 +149,8 @@ export default function SignalCard({ signal }: { signal: EngineOutput }) {
           <ScoreRow label="Momentum"        value={signal.score.momentumScore} />
           <ScoreRow label="Breakout/S&R"    value={signal.score.breakoutScore} />
           <ScoreRow label="Supply & Demand" value={signal.score.sdScore} />
+          <ScoreRow label="ADX Filter"      value={signal.score.adxScore} max={1} />
+          <ScoreRow label="Bollinger Band"  value={signal.score.bbScore} />
           <ScoreRow label="Pattern"         value={signal.score.patternBonus} max={1} />
           {signal.score.volatilityPenalty !== 0 && (
             <ScoreRow label="Volatility" value={signal.score.volatilityPenalty} />
@@ -241,19 +243,29 @@ function WhenToTrade({ signal }: { signal: EngineOutput }) {
   const rsi = isNaN(ind.rsi) ? 50 : ind.rsi;
   const macdBull = ind.macdLine > ind.signalLine;
 
+  const adxTrending  = !isNaN(ind.adx) && ind.adx > 20;
+  const stochOversold  = !isNaN(ind.stochK) && ind.stochK < 30;
+  const stochOverbought = !isNaN(ind.stochK) && ind.stochK > 70;
+  const bbLow  = !isNaN(ind.bbPercentB) && ind.bbPercentB <= 0.2;
+  const bbHigh = !isNaN(ind.bbPercentB) && ind.bbPercentB >= 0.8;
+
   const longConditions: Condition[] = [
     { label: "Uptrend active — EMA20 above EMA50",         met: score.trendScore > 0 },
+    { label: "ADX > 20 — market is trending",              met: adxTrending },
     { label: "RSI building strength (40–70)",              met: rsi >= 40 && rsi < 70 },
+    { label: "Stochastic oversold or bullish cross (< 30)", met: stochOversold },
     { label: "MACD bullish — above signal line",           met: macdBull },
-    { label: "At support or broke above resistance",       met: score.breakoutScore > 0 },
+    { label: "At support / broke resistance / BB low",     met: score.breakoutScore > 0 || bbLow },
     { label: "Price in demand zone",                       met: score.sdScore > 0 },
   ];
 
   const shortConditions: Condition[] = [
     { label: "Downtrend active — EMA20 below EMA50",       met: score.trendScore < 0 },
+    { label: "ADX > 20 — market is trending",              met: adxTrending },
     { label: "RSI showing weakness (30–60)",               met: rsi > 30 && rsi <= 60 },
+    { label: "Stochastic overbought or bearish cross (> 70)", met: stochOverbought },
     { label: "MACD bearish — below signal line",           met: !macdBull },
-    { label: "At resistance or broke below support",       met: score.breakoutScore < 0 },
+    { label: "At resistance / broke support / BB high",    met: score.breakoutScore < 0 || bbHigh },
     { label: "Price in supply zone",                       met: score.sdScore < 0 },
   ];
 
