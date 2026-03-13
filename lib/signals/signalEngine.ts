@@ -13,6 +13,9 @@ import {
 } from "@/lib/indicators/supportResistance";
 import { detectPatterns, patternLabel } from "@/lib/indicators/patterns";
 import { analyzeSDZones, buildSDReason } from "@/lib/indicators/supplyDemand";
+import { calculateADX } from "@/lib/indicators/adx";
+import { calculateBollingerBands } from "@/lib/indicators/bollingerBands";
+import { calculateStochastic } from "@/lib/indicators/stochastic";
 import {
   computeScoreBreakdown,
   scoreToSignal,
@@ -32,6 +35,17 @@ export interface EngineOutput extends SignalResult {
     resistanceLevels: number[];
     detectedPatterns: string[];
     sd: SDAnalysis;
+    // New indicators
+    adx: number;
+    plusDI: number;
+    minusDI: number;
+    bbUpper: number;
+    bbMiddle: number;
+    bbLower: number;
+    bbWidth: number;
+    bbPercentB: number;
+    stochK: number;
+    stochD: number;
   };
 }
 
@@ -124,6 +138,9 @@ export function runSignalEngine(
   const rsiArr   = calculateRSI(closes, 14);
   const macdArr  = calculateMACD(closes);
   const atrArr   = calculateATR(candles, 14);
+  const adxArr   = calculateADX(candles, 14);
+  const bbArr    = calculateBollingerBands(closes, 20, 2);
+  const stochArr = calculateStochastic(candles, 14, 3);
 
   const ema20     = ema20Arr[len - 1];
   const ema50     = ema50Arr[len - 1];
@@ -133,6 +150,10 @@ export function runSignalEngine(
   const macd      = macdArr[len - 1];
   const macdPrev  = macdArr[len - 2] ?? macd;
   const atr       = atrArr[len - 1];
+  const adxVal    = adxArr[len - 1];
+  const bb        = bbArr[len - 1];
+  const stoch     = stochArr[len - 1];
+  const stochPrev = stochArr[len - 2] ?? stoch;
 
   // Rolling average ATR (last 20 bars)
   const validAtrs = atrArr.filter((v) => !isNaN(v)).slice(-20);
@@ -170,6 +191,15 @@ export function runSignalEngine(
     patterns,
     sd,
     settings,
+    adx:        adxVal.adx,
+    plusDI:     adxVal.plusDI,
+    minusDI:    adxVal.minusDI,
+    bbPercentB: bb.percentB,
+    bbWidth:    bb.width,
+    stochK:     stoch.k,
+    stochD:     stoch.d,
+    stochKPrev: stochPrev.k,
+    stochDPrev: stochPrev.d,
   };
 
   const score      = computeScoreBreakdown(scoreInput);
@@ -222,6 +252,16 @@ export function runSignalEngine(
       resistanceLevels: sr.resistance,
       detectedPatterns: patternLabels,
       sd,
+      adx:        adxVal.adx,
+      plusDI:     adxVal.plusDI,
+      minusDI:    adxVal.minusDI,
+      bbUpper:    bb.upper,
+      bbMiddle:   bb.middle,
+      bbLower:    bb.lower,
+      bbWidth:    bb.width,
+      bbPercentB: bb.percentB,
+      stochK:     stoch.k,
+      stochD:     stoch.d,
     },
   };
 }

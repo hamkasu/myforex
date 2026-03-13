@@ -49,6 +49,32 @@ function macdStatus(h: number): { text: string; color: string } {
   return           { text: "Neutral", color: "bg-slate-600/30 text-slate-300" };
 }
 
+function adxStatus(adx: number): { text: string; color: string } {
+  if (isNaN(adx)) return { text: "—", color: "bg-slate-600/30 text-slate-400" };
+  if (adx > 40)   return { text: "Strong Trend", color: "bg-blue-600/30 text-blue-300" };
+  if (adx > 25)   return { text: "Trending",     color: "bg-green-600/30 text-green-300" };
+  if (adx > 20)   return { text: "Developing",   color: "bg-yellow-600/30 text-yellow-300" };
+  return                 { text: "Ranging",       color: "bg-slate-600/30 text-slate-400" };
+}
+
+function stochStatus(k: number): { text: string; color: string } {
+  if (isNaN(k))  return { text: "—",          color: "bg-slate-600/30 text-slate-400" };
+  if (k < 20)    return { text: "Oversold",   color: "bg-green-600/30 text-green-300" };
+  if (k < 40)    return { text: "Weak",       color: "bg-red-600/30 text-red-300" };
+  if (k < 60)    return { text: "Neutral",    color: "bg-slate-600/30 text-slate-300" };
+  if (k < 80)    return { text: "Strong",     color: "bg-green-600/30 text-green-300" };
+  return                { text: "Overbought", color: "bg-red-600/30 text-red-300" };
+}
+
+function bbStatus(pB: number): { text: string; color: string } {
+  if (isNaN(pB))  return { text: "—",             color: "bg-slate-600/30 text-slate-400" };
+  if (pB < 0)     return { text: "Below Band",     color: "bg-green-600/30 text-green-300" };
+  if (pB <= 0.1)  return { text: "Near Lower",     color: "bg-green-600/30 text-green-300" };
+  if (pB >= 1)    return { text: "Above Band",     color: "bg-red-600/30 text-red-300" };
+  if (pB >= 0.9)  return { text: "Near Upper",     color: "bg-red-600/30 text-red-300" };
+  return                 { text: "Mid Band",        color: "bg-slate-600/30 text-slate-300" };
+}
+
 function emaTrendStatus(ema20: number, ema50: number): { text: string; color: string } {
   if (ema20 > ema50) return { text: "Uptrend",   color: "bg-green-600/30 text-green-300" };
   if (ema20 < ema50) return { text: "Downtrend", color: "bg-red-600/30 text-red-300" };
@@ -189,6 +215,24 @@ export default function IndicatorsPanel({
             label="ATR (14)"
             value={ind.atr?.toFixed(decimals) ?? "—"}
             subtext="Average True Range — volatility measure"
+          />
+          <IndicatorRow
+            label="ADX (14)"
+            value={isNaN(ind.adx) ? "—" : ind.adx.toFixed(1)}
+            subtext={`+DI: ${isNaN(ind.plusDI) ? "—" : ind.plusDI.toFixed(1)}  ·  -DI: ${isNaN(ind.minusDI) ? "—" : ind.minusDI.toFixed(1)}`}
+            badge={adxStatus(ind.adx)}
+          />
+          <IndicatorRow
+            label="Bollinger %B"
+            value={isNaN(ind.bbPercentB) ? "—" : ind.bbPercentB.toFixed(2)}
+            subtext={`Upper: ${isNaN(ind.bbUpper) ? "—" : ind.bbUpper.toFixed(decimals)}  ·  Lower: ${isNaN(ind.bbLower) ? "—" : ind.bbLower.toFixed(decimals)}`}
+            badge={bbStatus(ind.bbPercentB)}
+          />
+          <IndicatorRow
+            label="Stochastic"
+            value={isNaN(ind.stochK) ? "—" : ind.stochK.toFixed(1)}
+            subtext={`%K: ${isNaN(ind.stochK) ? "—" : ind.stochK.toFixed(1)}  ·  %D: ${isNaN(ind.stochD) ? "—" : ind.stochD.toFixed(1)}`}
+            badge={stochStatus(ind.stochK)}
           />
 
           {/* Pivot-based support */}

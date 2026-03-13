@@ -88,6 +88,8 @@ export interface ScoreBreakdown {
   volatilityPenalty: number; // 0 to -2
   patternBonus: number;      // -1 to +1
   sdScore: number;           // -2 to +2  (supply & demand zones)
+  adxScore: number;          // -1 (ranging) | 0 | +1 (strongly trending)
+  bbScore: number;           // -2 to +2  (Bollinger Band position)
   total: number;             // sum of all dimensions
 }
 
