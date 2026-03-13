@@ -44,8 +44,9 @@ function dateStr(d: Date): string {
 }
 
 async function fetchFromPolygon(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
-  const apiKey = process.env.POLYGON_API_KEY;
-  if (!apiKey) throw new Error("POLYGON_API_KEY not configured");
+  // Massive.com is the rebranded Polygon.io (Oct 2025); accept either key name
+  const apiKey = process.env.MASSIVE_API_KEY ?? process.env.POLYGON_API_KEY;
+  if (!apiKey) throw new Error("MASSIVE_API_KEY not configured");
 
   const ticker = POLYGON_TICKER[pair];
   const { multiplier, timespan } = POLYGON_TF[timeframe];
@@ -54,15 +55,15 @@ async function fetchFromPolygon(pair: ForexPair, timeframe: Timeframe): Promise<
   const from = new Date(Date.now() - LOOKBACK_DAYS[timeframe] * 24 * 3600 * 1000);
 
   const url =
-    `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${multiplier}/${timespan}` +
+    `https://api.massive.com/v2/aggs/ticker/${ticker}/range/${multiplier}/${timespan}` +
     `/${dateStr(from)}/${dateStr(to)}` +
     `?adjusted=false&sort=asc&limit=200&apiKey=${apiKey}`;
 
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Polygon HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Massive HTTP ${res.status}`);
 
   const data = await res.json();
-  if (data.status === "ERROR") throw new Error(`Polygon: ${data.error ?? data.message}`);
+  if (data.status === "ERROR") throw new Error(`Massive: ${data.error ?? data.message}`);
   if (!Array.isArray(data.results) || data.results.length === 0)
     throw new Error("Polygon returned no results");
 
