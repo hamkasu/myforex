@@ -1,7 +1,8 @@
 "use client";
 
 import { RefreshCw, TrendingUp, ChevronDown } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { fmtTime } from "@/lib/utils/time";
 import type { ForexPair, Timeframe } from "@/types";
 import { FOREX_PAIRS, TIMEFRAMES } from "@/types";
@@ -29,52 +30,82 @@ function PairDropdown({
   onPairChange: (p: ForexPair) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+  const updatePos = useCallback(() => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left });
   }, []);
 
+  const toggle = () => {
+    updatePos();
+    setOpen((v) => !v);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (
+        btnRef.current?.contains(e.target as Node) ||
+        menuRef.current?.contains(e.target as Node)
+      ) return;
+      setOpen(false);
+    }
+    function onScroll() { updatePos(); }
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, updatePos]);
+
+  const menu = open && typeof window !== "undefined" && createPortal(
+    <div
+      ref={menuRef}
+      style={{ top: pos.top, left: pos.left }}
+      className="fixed z-[9999] bg-[#111827] border border-[#1e2d45] rounded-xl shadow-xl py-1 min-w-[180px]"
+    >
+      {PAIR_GROUPS.map(({ label, pairs }) => (
+        <div key={label}>
+          <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+            {label}
+          </div>
+          {pairs.map((p) => (
+            <button
+              key={p}
+              onClick={() => { onPairChange(p); setOpen(false); }}
+              className={clsx(
+                "w-full text-left px-4 py-1.5 text-sm font-medium transition-colors",
+                p === pair
+                  ? "text-blue-400 bg-blue-500/10"
+                  : "text-slate-300 hover:bg-[#1e2d45] hover:text-white"
+              )}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>,
+    document.body,
+  );
+
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={toggle}
         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a0e1a] hover:bg-[#1e2d45] border border-[#1e2d45] rounded-lg text-sm font-semibold text-white transition-colors"
       >
         {pair}
         <ChevronDown className={clsx("w-3.5 h-3.5 text-slate-400 transition-transform", open && "rotate-180")} />
       </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-[#111827] border border-[#1e2d45] rounded-xl shadow-xl py-1 min-w-[180px]">
-          {PAIR_GROUPS.map(({ label, pairs }) => (
-            <div key={label}>
-              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                {label}
-              </div>
-              {pairs.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => { onPairChange(p); setOpen(false); }}
-                  className={clsx(
-                    "w-full text-left px-4 py-1.5 text-sm font-medium transition-colors",
-                    p === pair
-                      ? "text-blue-400 bg-blue-500/10"
-                      : "text-slate-300 hover:bg-[#1e2d45] hover:text-white"
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      {menu}
+    </>
   );
 }
 
