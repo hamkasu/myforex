@@ -2,19 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { isSubscribed } from "@/lib/subscription";
 import type { BacktestResult } from "@/types";
 import type { Session } from "next-auth";
 
-function requireUserId(session: Session | null): string | null {
+async function requireAccess(session: Session | null): Promise<string | null> {
   if (!session?.user) return null;
-  return (session.user as any).id as string | null ?? null;
+  const userId = (session.user as any).id as string | undefined;
+  if (!userId) return null;
+  const ok = await isSubscribed(userId);
+  return ok ? userId : null;
 }
 
 // GET /api/backtests — return user's 20 most recent backtest results
 export async function GET() {
   const session = await getServerSession(authOptions);
-  const userId = requireUserId(session);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireAccess(session);
+  if (!userId) return NextResponse.json({ error: "Unauthorized or subscription required" }, { status: 401 });
 
   const rows = await prisma.backtestResult.findMany({
     where: { userId },
@@ -46,8 +50,8 @@ export async function GET() {
 // POST /api/backtests — save a backtest summary (trades array excluded)
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  const userId = requireUserId(session);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireAccess(session);
+  if (!userId) return NextResponse.json({ error: "Unauthorized or subscription required" }, { status: 401 });
 
   try {
     const body: BacktestResult = await req.json();

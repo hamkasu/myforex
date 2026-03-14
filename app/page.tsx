@@ -30,6 +30,7 @@ import BacktestPanel from "@/components/backtest/BacktestPanel";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import AlertsPanel from "@/components/alerts/AlertsPanel";
 import IndicatorsPanel from "@/components/signal/IndicatorsPanel";
+import SubscriptionGate from "@/components/SubscriptionGate";
 
 // Dynamically import the chart (uses browser APIs)
 const CandlestickChart = dynamic(() => import("@/components/chart/CandlestickChart"), {
@@ -245,6 +246,7 @@ export default function HomePage() {
   if (status === "unauthenticated") return null;
 
   return (
+    <SubscriptionGate>
     <div className="min-h-screen flex flex-col bg-[#0a0e1a]">
       <OfflineBanner isOnline={isOnline} />
 
@@ -342,6 +344,7 @@ export default function HomePage() {
       {/* Mobile bottom navigation */}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
+    </SubscriptionGate>
   );
 }
 
