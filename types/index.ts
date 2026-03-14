@@ -100,7 +100,7 @@ export interface ScoreBreakdown {
   breakoutScore: number;     // -2 to +2
   volatilityPenalty: number; // 0 to -2
   patternBonus: number;      // -1 to +1
-  sdScore: number;           // -2 to +2  (supply & demand zones)
+  sdScore: number;           // -4 to +4  (supply & demand zones — highest weight)
   adxScore: number;          // -1 (ranging) | 0 | +1 (strongly trending)
   bbScore: number;           // -2 to +2  (Bollinger Band position)
   divergenceScore: number;   // -2 to +2  (RSI + MACD divergence)
@@ -191,8 +191,9 @@ export interface BacktestResult {
   // Quant enhancements (optional — absent in legacy stored results)
   componentIC?: Record<string, number>;    // Pearson IC per score component
   walkForward?: { inSample: WFStats; outOfSample: WFStats };
-  regimeFiltered?: number;               // trades blocked by regime gate
+  regimeFiltered?: number;               // trades blocked by extreme ATR gate
   htfFiltered?: number;                  // trades blocked by higher-TF misalignment
+  sdFiltered?: number;                   // trades blocked by S&D zone counter-direction gate
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────

@@ -12,14 +12,10 @@ import type {
 import { DEFAULT_SETTINGS } from "@/types";
 import { runSignalEngine } from "@/lib/signals/signalEngine";
 import { calculateATR, atrPercentile } from "@/lib/indicators/atr";
-import { calculateADX } from "@/lib/indicators/adx";
 import { calculateEMA } from "@/lib/indicators/ema";
 import { downsampleCandles, getDownsampleFactor } from "@/lib/utils/downsample";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-/** Minimum ADX to allow entry — below this the market is ranging/choppy */
-const ADX_MIN = 15;
 
 /** ATR percentile ceiling (0–1) — entries blocked above this (extreme vol spikes) */
 const ATR_PCTILE_MAX = 0.92;
@@ -126,10 +122,10 @@ export function runBacktest(
   let maxDrawdown    = 0;
   let regimeFiltered = 0;
   let htfFiltered    = 0;
+  let sdFiltered     = 0;
 
-  // ── Pre-compute full-series indicators (avoids O(n²) repeated calls) ──────
+  // ── Pre-compute ATR array for percentile/adaptive-multiplier use ──────────
   const atrArr = calculateATR(candles, 14);
-  const adxArr = calculateADX(candles, 14);
 
   // ── Higher-TF EMA trend (improvement #7: multi-TF alignment) ─────────────
   const dsFactor = getDownsampleFactor(timeframe);
@@ -148,15 +144,18 @@ export function runBacktest(
 
   /** True if the higher-TF EMA trend agrees with `direction` at bar `i` */
   function htfAligned(i: number, direction: "long" | "short"): boolean {
-    if (dsFactor <= 1 || htfCandles.length === 0) return true; // no higher TF
+    if (dsFactor <= 1 || htfCandles.length === 0) return true;
     const barTime = candles[i].time;
-    // Find the latest completed higher-TF bar whose close time <= current bar
     let htfIdx = -1;
     for (let j = htfTimes.length - 1; j >= 0; j--) {
       if (htfTimes[j] <= barTime) { htfIdx = j; break; }
     }
     if (htfIdx < 0) return true;
-    const htfBull = htfEma20Arr[htfIdx] > htfEma50Arr[htfIdx];
+    const e20 = htfEma20Arr[htfIdx];
+    const e50 = htfEma50Arr[htfIdx];
+    // If either EMA is not yet valid (insufficient HTF bars) — don't block
+    if (isNaN(e20) || isNaN(e50)) return true;
+    const htfBull = e20 > e50;
     return direction === "long" ? htfBull : !htfBull;
   }
 
@@ -236,11 +235,13 @@ export function runBacktest(
     // ── 2. Evaluate signal every N bars (no open trade) ─────────────────────
     if (openTrade || i % signalInterval !== 0) continue;
 
-    // ── Improvement #2: Regime gate ──────────────────────────────────────────
-    const adxVal  = adxArr[i]?.adx ?? NaN;
-    const pctile  = atrPercentile(atrArr, i, 50);
+    // ── Improvement #2: Regime gate (ATR extreme vol only) ───────────────────
+    // ADX already influences score via adxScore() — hard-gating on ADX was
+    // too aggressive on short windows where market is often in consolidation.
+    // Only block on genuine extreme ATR spikes (flash crashes, news events).
+    const pctile = atrPercentile(atrArr, i, 50);
 
-    if (isNaN(adxVal) || adxVal < ADX_MIN || pctile > ATR_PCTILE_MAX) {
+    if (pctile > ATR_PCTILE_MAX) {
       regimeFiltered++;
       continue;
     }
@@ -257,6 +258,14 @@ export function runBacktest(
 
     const direction: "long" | "short" =
       result.signal === "BUY" || result.signal === "STRONG_BUY" ? "long" : "short";
+
+    // ── S&D priority gate ────────────────────────────────────────────────────
+    // S&D zones are the highest-priority factor. Never trade against a confirmed zone:
+    //   • Inside supply zone → only shorts allowed (no longs against strong sellers)
+    //   • Inside demand zone → only longs allowed (no shorts against strong buyers)
+    const sd = result.indicators.sd;
+    if (sd.inSupplyZone && direction === "long") { sdFiltered++; continue; }
+    if (sd.inDemandZone && direction === "short") { sdFiltered++; continue; }
 
     // ── Improvement #7: Multi-TF alignment gate ───────────────────────────────
     if (!htfAligned(i, direction)) {
@@ -356,5 +365,6 @@ export function runBacktest(
     walkForward,
     regimeFiltered,
     htfFiltered,
+    sdFiltered,
   };
 }

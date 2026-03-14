@@ -279,7 +279,8 @@ function ComponentICTable({ ic }: { ic: Record<string, number> }) {
 function RegimeBadge({ result }: { result: BacktestResult }) {
   const rf = result.regimeFiltered ?? 0;
   const hf = result.htfFiltered ?? 0;
-  if (rf === 0 && hf === 0) return null;
+  const sf = result.sdFiltered    ?? 0;
+  if (rf === 0 && hf === 0 && sf === 0) return null;
 
   return (
     <div className="rounded-lg bg-[#0a0e1a] p-3">
@@ -290,7 +291,12 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
       <div className="flex flex-wrap gap-2 text-xs mb-2">
         {rf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-yellow-300">
-            {rf} skipped — regime gate (ADX or extreme ATR)
+            {rf} skipped — extreme volatility spike (ATR &gt; 92nd pctile)
+          </span>
+        )}
+        {sf > 0 && (
+          <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-purple-300">
+            {sf} skipped — S&amp;D zone counter-direction
           </span>
         )}
         {hf > 0 && (
@@ -299,14 +305,18 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
           </span>
         )}
       </div>
+      {sf > 0 && (
+        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+          <span className="text-purple-400 font-medium">S&amp;D gate (highest priority):</span>{" "}
+          never trade against a confirmed zone — longs blocked inside supply zones, shorts blocked
+          inside demand zones. S&amp;D also contributes ±4 pts to score (double all other factors).
+        </p>
+      )}
       {rf > 0 && (
-        <p className="text-[10px] text-slate-500 leading-relaxed">
-          <span className="text-slate-400 font-medium">Regime gate:</span> signals are skipped when{" "}
-          <span className="text-yellow-400">ADX &lt; 15</span> (market ranging/choppy — trend signals
-          unreliable) or <span className="text-yellow-400">ATR &gt; 92nd percentile</span> (extreme
-          volatility spike). These are the{" "}
-          {rf === result.totalTrades + rf ? "only" : "filtered"} evaluation slots
-          that failed the regime check.
+        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+          <span className="text-slate-400 font-medium">Volatility gate:</span> entries skipped when
+          ATR exceeds the 92nd percentile — flash crashes or news spikes where SL/TP levels are
+          unreliable. ADX influence applied through score (−1 when ADX &lt; 20).
         </p>
       )}
     </div>

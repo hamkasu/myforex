@@ -153,15 +153,18 @@ export function scoreToSignal(total: number, minConfidence: number, confidence: 
 }
 
 /**
- * Supply & Demand Zone Score (-2 to +2):
- *  +2: Price inside a demand zone (strong buy area)
- *  +1: Price approaching a fresh demand zone below
+ * Supply & Demand Zone Score (-4 to +4) — highest weight component:
+ *  +4: Price inside a strong fresh demand zone (optimal buy area)
+ *  +2: Price inside a demand zone or approaching a fresh demand zone below
  *  0:  No significant S&D context
- *  -1: Price approaching a fresh supply zone above
- *  -2: Price inside a supply zone (strong sell area)
+ *  -2: Price inside a supply zone or approaching a fresh supply zone above
+ *  -4: Price inside a strong fresh supply zone (optimal sell area)
+ *
+ * The raw sdScore from analyzeSDZones is in [-2, +2]; we multiply by 2
+ * to make S&D the dominant factor in signal confidence.
  */
 export function supplyDemandScore(sd: SDAnalysis): number {
-  return Math.max(-2, Math.min(2, sd.sdScore));
+  return Math.max(-4, Math.min(4, sd.sdScore * 2));
 }
 
 /**
@@ -203,8 +206,8 @@ export function bbScore(percentB: number, bbWidth: number): number {
 
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Max possible positive sum: trend(2)+momentum(2)+breakout(2)+pattern(1)+sd(2)+adx(1)+bb(2)+divergence(2) = 14
-  const maxScore = 14;
+  // Max possible positive sum: trend(2)+momentum(2)+breakout(2)+pattern(1)+sd(4)+adx(1)+bb(2)+divergence(2) = 16
+  const maxScore = 16;
   const raw = (score.total / maxScore) * 100;
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
