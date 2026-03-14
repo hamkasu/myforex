@@ -290,7 +290,7 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
       <div className="flex flex-wrap gap-2 text-xs mb-2">
         {rf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-yellow-300">
-            {rf} skipped — regime gate (ADX or extreme ATR)
+            {rf} skipped — extreme volatility spike (ATR &gt; 92nd pctile)
           </span>
         )}
         {hf > 0 && (
@@ -301,12 +301,10 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
       </div>
       {rf > 0 && (
         <p className="text-[10px] text-slate-500 leading-relaxed">
-          <span className="text-slate-400 font-medium">Regime gate:</span> signals are skipped when{" "}
-          <span className="text-yellow-400">ADX &lt; 15</span> (market ranging/choppy — trend signals
-          unreliable) or <span className="text-yellow-400">ATR &gt; 92nd percentile</span> (extreme
-          volatility spike). These are the{" "}
-          {rf === result.totalTrades + rf ? "only" : "filtered"} evaluation slots
-          that failed the regime check.
+          <span className="text-slate-400 font-medium">Volatility gate:</span> entries skipped when
+          ATR exceeds the 92nd percentile of recent history — flash crashes or high-impact news
+          events where SL/TP levels become unreliable. ADX ranging/trending influence is applied
+          through the score (−1 when ADX &lt; 20) rather than as a hard block.
         </p>
       )}
     </div>
