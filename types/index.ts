@@ -226,7 +226,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ema2Period: 50,
   atrMultiplierSL: 1.5,
   atrMultiplierTP: 2.5,
-  minConfidence: 35,
+  minConfidence: 30,
   trendWeight: 2,
   momentumWeight: 2,
   breakoutWeight: 2,
