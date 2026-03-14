@@ -18,11 +18,11 @@ import { downsampleCandles, getDownsampleFactor } from "@/lib/utils/downsample";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Minimum ADX to allow entry — below this the market is ranging */
-const ADX_MIN = 18;
+/** Minimum ADX to allow entry — below this the market is ranging/choppy */
+const ADX_MIN = 15;
 
-/** ATR percentile ceiling (0–1) — entries blocked above this (extreme vol) */
-const ATR_PCTILE_MAX = 0.85;
+/** ATR percentile ceiling (0–1) — entries blocked above this (extreme vol spikes) */
+const ATR_PCTILE_MAX = 0.92;
 
 /** Adaptive SL/TP multipliers indexed by ATR percentile bucket */
 function adaptiveMultipliers(
