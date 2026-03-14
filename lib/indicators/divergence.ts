@@ -16,6 +16,17 @@ type Pivot = { price: number; rsi: number; macdHist: number };
  * Bearish: price makes higher high while RSI/MACD makes lower high → downward reversal
  *
  * Score: +1 per bullish divergence source (RSI, MACD), -1 per bearish. Clamped to [-2, +2].
+ *
+ * Context gates (prevent false signals in trending markets):
+ *  - Bearish RSI divergence only fires when current swing-high RSI > 60.
+ *    In a healthy uptrend, RSI routinely makes lower highs well below 70; this
+ *    is normal momentum moderation, NOT a reversal warning.
+ *  - Bullish RSI divergence only fires when current swing-low RSI < 45.
+ *    Similarly, a mild RSI uptick during a downtrend means nothing.
+ *  - Bearish MACD divergence only fires when the histogram is still positive
+ *    (momentum weakening from bullish territory — a meaningful warning).
+ *  - Bullish MACD divergence only fires when the histogram is still negative
+ *    (momentum improving from bearish territory — a meaningful reversal signal).
  */
 export function detectDivergence(
   candles: Candle[],
@@ -57,34 +68,50 @@ export function detectDivergence(
   let score = 0;
 
   // Bullish RSI divergence: price LL, RSI HL
+  // Gate: current RSI low must be < 45 (approaching oversold — divergence is meaningful here)
   if (lows.length >= 2) {
     const [p, c] = lows.slice(-2);
-    if (c.price < p.price && !isNaN(c.rsi) && !isNaN(p.rsi) && c.rsi > p.rsi) score += 1;
+    if (
+      c.price < p.price &&
+      !isNaN(c.rsi) && !isNaN(p.rsi) &&
+      c.rsi > p.rsi &&
+      c.rsi < 45
+    ) score += 1;
   }
 
   // Bearish RSI divergence: price HH, RSI LH
+  // Gate: current RSI high must be > 60 (from elevated territory — divergence is meaningful here)
   if (highs.length >= 2) {
     const [p, c] = highs.slice(-2);
-    if (c.price > p.price && !isNaN(c.rsi) && !isNaN(p.rsi) && c.rsi < p.rsi) score -= 1;
+    if (
+      c.price > p.price &&
+      !isNaN(c.rsi) && !isNaN(p.rsi) &&
+      c.rsi < p.rsi &&
+      c.rsi > 60
+    ) score -= 1;
   }
 
   // Bullish MACD histogram divergence: price LL, MACD HL
+  // Gate: histogram must be negative (improving from bearish territory)
   if (lows.length >= 2) {
     const [p, c] = lows.slice(-2);
     if (
       c.price < p.price &&
       !isNaN(c.macdHist) && !isNaN(p.macdHist) &&
-      c.macdHist > p.macdHist
+      c.macdHist > p.macdHist &&
+      c.macdHist < 0
     ) score += 1;
   }
 
   // Bearish MACD histogram divergence: price HH, MACD LH
+  // Gate: histogram must be positive (weakening from bullish territory)
   if (highs.length >= 2) {
     const [p, c] = highs.slice(-2);
     if (
       c.price > p.price &&
       !isNaN(c.macdHist) && !isNaN(p.macdHist) &&
-      c.macdHist < p.macdHist
+      c.macdHist < p.macdHist &&
+      c.macdHist > 0
     ) score -= 1;
   }
 
