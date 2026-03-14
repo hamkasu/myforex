@@ -25,6 +25,10 @@ model User {
   subscriptionStatus String?   // active | trialing | canceled | past_due | unpaid
   currentPeriodEnd   DateTime?
 
+  // Usage tracking
+  visitCount   Int       @default(0)
+  lastVisitAt  DateTime?
+
   signals   Signal[]
   backtests BacktestResult[]
   settings  UserSettings?

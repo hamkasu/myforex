@@ -30,6 +30,9 @@ export default function SubscriptionGate({ children }: { children: React.ReactNo
         setChecked(true);
         if (!data.subscribed) {
           router.replace("/pricing");
+        } else {
+          // Fire-and-forget: record the visit
+          fetch("/api/visit", { method: "POST" }).catch(() => {});
         }
       })
       .catch(() => {
