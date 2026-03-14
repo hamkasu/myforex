@@ -205,11 +205,13 @@ export default function HomePage() {
   // ── Persist pair/timeframe/tab ────────────────────────────────────────────
   const handlePairChange = (p: ForexPair) => {
     setPair(p);
+    setCandles([]); // clear stale candles so backtest can't run against the wrong pair
     saveLastPair(p);
   };
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf);
+    setCandles([]); // clear stale candles so backtest can't run against the wrong timeframe
     saveLastTimeframe(tf);
   };
 
