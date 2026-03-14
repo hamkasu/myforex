@@ -287,18 +287,28 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
         <ShieldAlert className="w-3 h-3 text-yellow-400" />
         Entry Filters Applied
       </div>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-2 text-xs mb-2">
         {rf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-yellow-300">
-            {rf} blocked by regime gate (ADX / ATR)
+            {rf} skipped — regime gate (ADX or extreme ATR)
           </span>
         )}
         {hf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-blue-300">
-            {hf} blocked by higher-TF misalignment
+            {hf} skipped — higher-TF trend conflict
           </span>
         )}
       </div>
+      {rf > 0 && (
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          <span className="text-slate-400 font-medium">Regime gate:</span> signals are skipped when{" "}
+          <span className="text-yellow-400">ADX &lt; 15</span> (market ranging/choppy — trend signals
+          unreliable) or <span className="text-yellow-400">ATR &gt; 92nd percentile</span> (extreme
+          volatility spike). These are the{" "}
+          {rf === result.totalTrades + rf ? "only" : "filtered"} evaluation slots
+          that failed the regime check.
+        </p>
+      )}
     </div>
   );
 }
