@@ -18,7 +18,16 @@ import { downsampleCandles, getDownsampleFactor } from "@/lib/utils/downsample";
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** ATR percentile ceiling (0–1) — entries blocked above this (extreme vol spikes) */
-const ATR_PCTILE_MAX = 0.92;
+const ATR_PCTILE_MAX = 0.95;
+
+/**
+ * Bars to look back when computing ATR percentile.
+ * 100 bars gives a more stable baseline so normal trending volatility
+ * doesn't push the current bar into the extreme bucket.
+ * (50 bars was too short — in a trending market the recent window is
+ * uniformly elevated, making almost every bar read >92nd percentile.)
+ */
+const ATR_PCTILE_LOOKBACK = 100;
 
 /** Adaptive SL/TP multipliers indexed by ATR percentile bucket */
 function adaptiveMultipliers(
@@ -239,7 +248,7 @@ export function runBacktest(
     // ADX already influences score via adxScore() — hard-gating on ADX was
     // too aggressive on short windows where market is often in consolidation.
     // Only block on genuine extreme ATR spikes (flash crashes, news events).
-    const pctile = atrPercentile(atrArr, i, 50);
+    const pctile = atrPercentile(atrArr, i, ATR_PCTILE_LOOKBACK);
 
     if (pctile > ATR_PCTILE_MAX) {
       regimeFiltered++;
