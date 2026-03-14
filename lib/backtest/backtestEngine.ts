@@ -122,6 +122,7 @@ export function runBacktest(
   let maxDrawdown    = 0;
   let regimeFiltered = 0;
   let htfFiltered    = 0;
+  let sdFiltered     = 0;
 
   // ── Pre-compute ATR array for percentile/adaptive-multiplier use ──────────
   const atrArr = calculateATR(candles, 14);
@@ -258,6 +259,14 @@ export function runBacktest(
     const direction: "long" | "short" =
       result.signal === "BUY" || result.signal === "STRONG_BUY" ? "long" : "short";
 
+    // ── S&D priority gate ────────────────────────────────────────────────────
+    // S&D zones are the highest-priority factor. Never trade against a confirmed zone:
+    //   • Inside supply zone → only shorts allowed (no longs against strong sellers)
+    //   • Inside demand zone → only longs allowed (no shorts against strong buyers)
+    const sd = result.indicators.sd;
+    if (sd.inSupplyZone && direction === "long") { sdFiltered++; continue; }
+    if (sd.inDemandZone && direction === "short") { sdFiltered++; continue; }
+
     // ── Improvement #7: Multi-TF alignment gate ───────────────────────────────
     if (!htfAligned(i, direction)) {
       htfFiltered++;
@@ -356,5 +365,6 @@ export function runBacktest(
     walkForward,
     regimeFiltered,
     htfFiltered,
+    sdFiltered,
   };
 }

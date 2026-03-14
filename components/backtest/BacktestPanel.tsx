@@ -279,7 +279,8 @@ function ComponentICTable({ ic }: { ic: Record<string, number> }) {
 function RegimeBadge({ result }: { result: BacktestResult }) {
   const rf = result.regimeFiltered ?? 0;
   const hf = result.htfFiltered ?? 0;
-  if (rf === 0 && hf === 0) return null;
+  const sf = result.sdFiltered    ?? 0;
+  if (rf === 0 && hf === 0 && sf === 0) return null;
 
   return (
     <div className="rounded-lg bg-[#0a0e1a] p-3">
@@ -293,18 +294,29 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
             {rf} skipped — extreme volatility spike (ATR &gt; 92nd pctile)
           </span>
         )}
+        {sf > 0 && (
+          <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-purple-300">
+            {sf} skipped — S&amp;D zone counter-direction
+          </span>
+        )}
         {hf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-blue-300">
             {hf} skipped — higher-TF trend conflict
           </span>
         )}
       </div>
+      {sf > 0 && (
+        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+          <span className="text-purple-400 font-medium">S&amp;D gate (highest priority):</span>{" "}
+          never trade against a confirmed zone — longs blocked inside supply zones, shorts blocked
+          inside demand zones. S&amp;D also contributes ±4 pts to score (double all other factors).
+        </p>
+      )}
       {rf > 0 && (
-        <p className="text-[10px] text-slate-500 leading-relaxed">
+        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
           <span className="text-slate-400 font-medium">Volatility gate:</span> entries skipped when
-          ATR exceeds the 92nd percentile of recent history — flash crashes or high-impact news
-          events where SL/TP levels become unreliable. ADX ranging/trending influence is applied
-          through the score (−1 when ADX &lt; 20) rather than as a hard block.
+          ATR exceeds the 92nd percentile — flash crashes or news spikes where SL/TP levels are
+          unreliable. ADX influence applied through score (−1 when ADX &lt; 20).
         </p>
       )}
     </div>
