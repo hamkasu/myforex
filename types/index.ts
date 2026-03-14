@@ -87,7 +87,7 @@ export interface SDAnalysis {
   freshDemandBelow: SDZone | null;
   nearFreshDemand: boolean;
   nearFreshSupply: boolean;
-  sdScore: number;       // -2 to +2
+  sdScore: number;       // continuous, typically -3 to +3 (strength-weighted)
 }
 
 // ─── Signal Engine ───────────────────────────────────────────────────────────
