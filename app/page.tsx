@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { ForexPair, Timeframe, TabId, Candle, AppSettings, StoredSignal } from "@/types";
+import type { ForexPair, Timeframe, TabId, Candle, AppSettings, StoredSignal, BacktestTrade } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { getCandles } from "@/lib/data/provider";
 import { runSignalEngine } from "@/lib/signals/signalEngine";
@@ -97,6 +97,7 @@ export default function HomePage() {
   const [signalHistory, setSignalHistory] = useState<StoredSignal[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [backtestTrades, setBacktestTrades] = useState<BacktestTrade[]>([]);
 
   const isAuthed = status === "authenticated";
 
@@ -205,13 +206,15 @@ export default function HomePage() {
   // ── Persist pair/timeframe/tab ────────────────────────────────────────────
   const handlePairChange = (p: ForexPair) => {
     setPair(p);
-    setCandles([]); // clear stale candles so backtest can't run against the wrong pair
+    setCandles([]);        // clear stale candles so backtest can't run against the wrong pair
+    setBacktestTrades([]); // clear stale trade markers from the previous pair
     saveLastPair(p);
   };
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf);
-    setCandles([]); // clear stale candles so backtest can't run against the wrong timeframe
+    setCandles([]);        // clear stale candles so backtest can't run against the wrong timeframe
+    setBacktestTrades([]); // clear stale trade markers
     saveLastTimeframe(tf);
   };
 
@@ -277,6 +280,7 @@ export default function HomePage() {
                 timeframe={timeframe}
                 signal={signal}
                 loading={loading}
+                backtestTrades={backtestTrades}
               />
 
               <DesktopTabs activeTab={activeTab} onTabChange={handleTabChange} />
@@ -291,6 +295,7 @@ export default function HomePage() {
                 timeframe={timeframe}
                 onSettingsChange={handleSettingsChange}
                 onHistoryClear={handleHistoryClear}
+                onBacktestResult={(r) => setBacktestTrades(r.trades)}
               />
             </div>
 
@@ -316,6 +321,7 @@ export default function HomePage() {
                   timeframe={timeframe}
                   signal={signal}
                   loading={loading}
+                  backtestTrades={backtestTrades}
                 />
                 {signal && (
                   <>
@@ -337,6 +343,7 @@ export default function HomePage() {
                 timeframe={timeframe}
                 onSettingsChange={handleSettingsChange}
                 onHistoryClear={handleHistoryClear}
+                onBacktestResult={(r) => setBacktestTrades(r.trades)}
               />
             )}
           </div>
@@ -351,6 +358,8 @@ export default function HomePage() {
 }
 
 // ── Tab Content Router ──────────────────────────────────────────────────────
+import type { BacktestResult } from "@/types";
+
 interface TabContentProps {
   activeTab: TabId;
   candles: Candle[];
@@ -361,11 +370,12 @@ interface TabContentProps {
   timeframe: Timeframe;
   onSettingsChange: (s: AppSettings) => void;
   onHistoryClear: () => void;
+  onBacktestResult: (result: BacktestResult) => void;
 }
 
 function TabContent({
   activeTab, candles, signal, settings, signalHistory,
-  pair, timeframe, onSettingsChange, onHistoryClear,
+  pair, timeframe, onSettingsChange, onHistoryClear, onBacktestResult,
 }: TabContentProps) {
   if (activeTab === "indicators" || activeTab === "overview") {
     return signal ? <IndicatorsPanel signal={signal} candles={candles} /> : null;
@@ -374,7 +384,15 @@ function TabContent({
     return <SignalHistory history={signalHistory} onClear={onHistoryClear} />;
   }
   if (activeTab === "backtest") {
-    return <BacktestPanel candles={candles} pair={pair} timeframe={timeframe} settings={settings} />;
+    return (
+      <BacktestPanel
+        candles={candles}
+        pair={pair}
+        timeframe={timeframe}
+        settings={settings}
+        onResult={onBacktestResult}
+      />
+    );
   }
   if (activeTab === "settings") {
     return <SettingsPanel settings={settings} onSave={onSettingsChange} />;

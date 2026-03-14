@@ -330,11 +330,14 @@ export default function BacktestPanel({
   pair,
   timeframe,
   settings,
+  onResult,
 }: {
   candles: Candle[];
   pair: ForexPair;
   timeframe: Timeframe;
   settings: AppSettings;
+  /** Called after each run so the parent can pass trade markers to the chart */
+  onResult?: (result: BacktestResult) => void;
 }) {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -349,12 +352,13 @@ export default function BacktestPanel({
       const res = runBacktest(candles, pair, timeframe, settings);
       setResult(res);
       saveBacktestResult(res);
+      onResult?.(res);
     } catch (err) {
       console.error("Backtest error:", err);
     } finally {
       setRunning(false);
     }
-  }, [candles, pair, timeframe, settings]);
+  }, [candles, pair, timeframe, settings, onResult]);
 
   const current = result;
 
