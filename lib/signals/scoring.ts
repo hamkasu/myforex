@@ -210,8 +210,11 @@ export function bbScore(percentB: number, bbWidth: number): number {
 
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Max possible positive sum: trend(2)+momentum(2)+breakout(2)+pattern(1)+sd(4)+adx(1)+bb(2)+divergence(2) = 16
-  const maxScore = 16;
+  // Base max = non-SD components: trend(2)+momentum(2)+breakout(2)+pattern(1)+adx(1)+bb(2)+divergence(2) = 12
+  // S&D (±4) is treated as a bonus — its contribution can push confidence above the base ceiling,
+  // but the final value is capped at 100. This prevents S&D = 0 (common in trending/ranging markets)
+  // from artificially deflating confidence for otherwise well-aligned signals.
+  const maxScore = 12;
   const raw = (score.total / maxScore) * 100;
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
