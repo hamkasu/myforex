@@ -18,7 +18,7 @@ import { downsampleCandles, getDownsampleFactor } from "@/lib/utils/downsample";
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** ATR percentile ceiling (0–1) — entries blocked above this (extreme vol spikes) */
-const ATR_PCTILE_MAX = 0.95;
+const ATR_PCTILE_MAX = 0.99;
 
 /**
  * Bars to look back when computing ATR percentile.

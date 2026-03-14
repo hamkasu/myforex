@@ -185,22 +185,35 @@ export function adxScore(adx: number): number {
 }
 
 /**
- * Bollinger Band Score (-2 to +2):
- *  Based on %B (price position within the bands):
- *  < 0   → below lower band (oversold extension)           +2
- *  0–0.1 → near lower band (potential support/bounce)      +1
- *  0.9–1 → near upper band (potential resistance/rejection) -1
- *  > 1   → above upper band (overbought extension)         -2
- *  Squeeze (very narrow bands): -1 modifier (uncertainty)
+ * Bollinger Band Score (-2 to +2), trend-aware:
+ *
+ * "Price below lower band" means opposite things depending on context:
+ *  - In an uptrend  → oversold extension, likely snap-back → +2 (bullish)
+ *  - In a downtrend → trend continuation / breakdown       → -1 (bearish)
+ *
+ * Similarly "above upper band":
+ *  - In a downtrend → overbought extension, likely snap-back → -2 (bearish)
+ *  - In an uptrend  → trend continuation / breakout          → +1 (bullish)
+ *
+ * Mid-band extremes (near lower/upper in neutral zone) are direction-neutral.
+ * Squeeze penalty remains regardless of trend.
  */
-export function bbScore(percentB: number, bbWidth: number): number {
+export function bbScore(percentB: number, bbWidth: number, ema20: number, ema50: number): number {
   if (isNaN(percentB)) return 0;
+  const bullishTrend = !isNaN(ema20) && !isNaN(ema50) && ema20 > ema50;
   let score = 0;
 
-  if (percentB < 0)    score = 2;   // below lower band — oversold
-  else if (percentB <= 0.1) score = 1;  // near lower band
-  else if (percentB >= 1)   score = -2; // above upper band — overbought
-  else if (percentB >= 0.9) score = -1; // near upper band
+  if (percentB < 0) {
+    // Below lower band: bounce signal in uptrend, trend extension in downtrend
+    score = bullishTrend ? 2 : -1;
+  } else if (percentB <= 0.1) {
+    score = bullishTrend ? 1 : 0;
+  } else if (percentB >= 1) {
+    // Above upper band: breakdown signal in downtrend, trend extension in uptrend
+    score = bullishTrend ? 1 : -2;
+  } else if (percentB >= 0.9) {
+    score = bullishTrend ? 0 : -1;
+  }
 
   // Squeeze penalty: very narrow bands signal uncertainty (breakout could go either way)
   if (!isNaN(bbWidth) && bbWidth < 0.003) score -= 1;
@@ -227,7 +240,7 @@ export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
   const pattern    = patternBonusScore(input.patterns);
   const sd         = supplyDemandScore(input.sd);
   const adx        = adxScore(input.adx);
-  const bb         = bbScore(input.bbPercentB, input.bbWidth);
+  const bb         = bbScore(input.bbPercentB, input.bbWidth, input.ema20, input.ema50);
   const divergence = Math.max(-2, Math.min(2, input.divergenceScore ?? 0));
 
   const total = trend + momentum + breakout + volatility + pattern + sd + adx + bb + divergence;

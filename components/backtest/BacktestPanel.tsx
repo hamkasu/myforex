@@ -291,7 +291,7 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
       <div className="flex flex-wrap gap-2 text-xs mb-2">
         {rf > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-yellow-300">
-            {rf} skipped — extreme volatility spike (ATR &gt; 95th pctile)
+            {rf} skipped — extreme volatility spike (ATR &gt; 99th pctile)
           </span>
         )}
         {sf > 0 && (
@@ -315,7 +315,7 @@ function RegimeBadge({ result }: { result: BacktestResult }) {
       {rf > 0 && (
         <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
           <span className="text-slate-400 font-medium">Volatility gate:</span> entries skipped when
-          ATR exceeds the 95th percentile — flash crashes or news spikes where SL/TP levels are
+          ATR exceeds the 99th percentile — flash crashes or news spikes where SL/TP levels are
           unreliable. ADX influence applied through score (−1 when ADX &lt; 20).
         </p>
       )}
