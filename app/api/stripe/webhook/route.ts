@@ -3,9 +3,6 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db/prisma";
 import type Stripe from "stripe";
 
-// Stripe requires the raw body for signature verification — disable body parsing
-export const config = { api: { bodyParser: false } };
-
 async function upsertSubscription(sub: Stripe.Subscription) {
   // Find user by stripeCustomerId
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
