@@ -103,6 +103,7 @@ export interface ScoreBreakdown {
   sdScore: number;           // -2 to +2  (supply & demand zones)
   adxScore: number;          // -1 (ranging) | 0 | +1 (strongly trending)
   bbScore: number;           // -2 to +2  (Bollinger Band position)
+  divergenceScore: number;   // -2 to +2  (RSI + MACD divergence)
   total: number;             // sum of all dimensions
 }
 
@@ -150,6 +151,9 @@ export interface BacktestTrade {
   pnlR: number;              // profit/loss in R (risk units)
   signal: SignalType;
   confidence: number;
+  scoreComponents?: ScoreBreakdown;  // per-trade score snapshot for IC analysis
+  exitReason?: "sl" | "tp" | "timeout";
+  atrPctile?: number;        // ATR percentile at entry (0–1)
 }
 
 export interface ConfidenceBand {
@@ -160,6 +164,13 @@ export interface ConfidenceBand {
   wins: number;
   winRate: number;      // 0–1
   avgR: number;         // average pnlR
+}
+
+export interface WFStats {
+  trades: number;
+  wins: number;
+  winRate: number;
+  totalR: number;
 }
 
 export interface BacktestResult {
@@ -177,6 +188,11 @@ export interface BacktestResult {
   calibration: ConfidenceBand[];
   trades: BacktestTrade[];
   runAt: number;             // timestamp
+  // Quant enhancements (optional — absent in legacy stored results)
+  componentIC?: Record<string, number>;    // Pearson IC per score component
+  walkForward?: { inSample: WFStats; outOfSample: WFStats };
+  regimeFiltered?: number;               // trades blocked by regime gate
+  htfFiltered?: number;                  // trades blocked by higher-TF misalignment
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
