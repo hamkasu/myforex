@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Candle, ForexPair, Timeframe } from "@/types";
+import type { Candle, ForexPair, Timeframe, BacktestTrade } from "@/types";
 import type { EngineOutput } from "@/lib/signals/signalEngine";
 import { calculateEMA } from "@/lib/indicators/ema";
 import { chartTimeFormatter, chartTickFormatter } from "@/lib/utils/time";
@@ -12,10 +12,12 @@ interface CandlestickChartProps {
   timeframe: Timeframe;
   signal: EngineOutput | null;
   loading: boolean;
+  /** When provided, replaces the live signal arrow with entry/TP/exit backtest markers */
+  backtestTrades?: BacktestTrade[];
 }
 
 export default function CandlestickChart({
-  candles, pair, timeframe, signal, loading,
+  candles, pair, timeframe, signal, loading, backtestTrades,
 }: CandlestickChartProps) {
   const containerRef    = useRef<HTMLDivElement>(null);
   const chartRef        = useRef<any>(null);
@@ -109,7 +111,7 @@ export default function CandlestickChart({
     };
   }, []);
 
-  // ── Update data + overlays on candle/signal change ───────────────────────
+  // ── Update data + overlays on candle/signal/backtest change ─────────────
   useEffect(() => {
     if (!candles.length || !candleSeriesRef.current) return;
 
@@ -132,67 +134,119 @@ export default function CandlestickChart({
       candles.map((c, i) => ({ time: c.time, value: ema50[i] })).filter((d) => !isNaN(d.value))
     );
 
-    // ── Remove stale S&D price lines ───────────────────────────────────────
+    // ── Remove stale price lines (S&D zones + previous backtest TPs) ──────
     for (const { series, line } of priceLinesRef.current) {
       try { series.removePriceLine(line); } catch { /* already gone */ }
     }
     priceLinesRef.current = [];
 
-    // ── Draw S&D zones as horizontal dashed price bands ────────────────────
-    if (signal?.indicators?.sd) {
-      const { supplyZones, demandZones } = signal.indicators.sd;
-      const cs = candleSeriesRef.current;
+    const cs = candleSeriesRef.current;
 
-      const addZoneLine = (price: number, color: string, title: string) => {
-        const line = cs.createPriceLine({
-          price,
-          color,
-          lineWidth:        1,
-          lineStyle:        2,   // Dashed
-          axisLabelVisible: true,
-          title,
-        });
-        priceLinesRef.current.push({ series: cs, line });
-      };
+    // ── Backtest mode: entry/TP/exit markers + TP price lines ─────────────
+    if (backtestTrades?.length) {
+      const markers: {
+        time: number; position: string; color: string; shape: string; text: string;
+      }[] = [];
 
-      // Demand zones (green) — top 3
-      for (const z of demandZones.slice(0, 3)) {
-        const opacity = z.status === "fresh" ? "dd" : "88";
-        const label   = `D${z.strength === 3 ? "★" : z.strength === 2 ? "+" : ""}`;
-        addZoneLine(z.top,    `#22c55e${opacity}`, label);
-        addZoneLine(z.bottom, `#22c55e66`,         "");
-      }
+      for (const trade of backtestTrades) {
+        const isLong  = trade.direction === "long";
+        const entryColor = isLong ? "#22c55e" : "#ef4444";
+        const exitColor  = trade.outcome === "win" ? "#22c55e" : "#ef4444";
 
-      // Supply zones (red) — top 3
-      for (const z of supplyZones.slice(0, 3)) {
-        const opacity = z.status === "fresh" ? "dd" : "88";
-        const label   = `S${z.strength === 3 ? "★" : z.strength === 2 ? "+" : ""}`;
-        addZoneLine(z.top,    `#ef4444${opacity}`, label);
-        addZoneLine(z.bottom, `#ef444466`,         "");
-      }
-    }
-
-    // ── Signal arrow marker ────────────────────────────────────────────────
-    if (signal) {
-      const markerTime = candles[candles.length - 1].time;
-      const isLong = signal.signal === "BUY" || signal.signal === "STRONG_BUY";
-      const isSell = signal.signal === "SELL" || signal.signal === "STRONG_SELL";
-
-      if (isLong || isSell) {
-        candleSeriesRef.current.setMarkers([{
-          time:     markerTime,
+        // Entry arrow
+        markers.push({
+          time:     trade.entryTime,
           position: isLong ? "belowBar" : "aboveBar",
-          color:    isLong ? "#22c55e" : "#ef4444",
+          color:    entryColor,
           shape:    isLong ? "arrowUp" : "arrowDown",
-          text:     signal.signal.replace("_", " "),
-        }]);
-      } else {
-        candleSeriesRef.current.setMarkers([]);
+          text:     isLong ? "L" : "S",
+        });
+
+        // Exit circle — shows outcome and R
+        const rLabel = `${trade.pnlR >= 0 ? "+" : ""}${trade.pnlR.toFixed(1)}R`;
+        const exitReason = trade.exitReason === "tp" ? "TP" : trade.exitReason === "sl" ? "SL" : "T";
+        markers.push({
+          time:     trade.exitTime,
+          position: isLong ? "aboveBar" : "belowBar",
+          color:    exitColor,
+          shape:    "circle",
+          text:     `${exitReason} ${rLabel}`,
+        });
+
+        // TP price line — dashed, labeled with R gain
+        const tpLine = cs.createPriceLine({
+          price:            trade.takeProfit,
+          color:            `${entryColor}99`,
+          lineWidth:        1,
+          lineStyle:        2,   // dashed
+          axisLabelVisible: true,
+          title:            `TP ${isLong ? "↑" : "↓"}`,
+        });
+        priceLinesRef.current.push({ series: cs, line: tpLine });
+      }
+
+      // lightweight-charts requires markers sorted by time
+      markers.sort((a, b) => a.time - b.time);
+      cs.setMarkers(markers);
+
+    } else {
+      // ── Live signal mode: S&D zones + current signal arrow ──────────────
+
+      // Draw S&D zones as horizontal dashed price bands
+      if (signal?.indicators?.sd) {
+        const { supplyZones, demandZones } = signal.indicators.sd;
+
+        const addZoneLine = (price: number, color: string, title: string) => {
+          const line = cs.createPriceLine({
+            price,
+            color,
+            lineWidth:        1,
+            lineStyle:        2,
+            axisLabelVisible: true,
+            title,
+          });
+          priceLinesRef.current.push({ series: cs, line });
+        };
+
+        // Demand zones (green) — top 3
+        for (const z of demandZones.slice(0, 3)) {
+          const opacity = z.status === "fresh" ? "dd" : "88";
+          const label   = `D${z.strength === 3 ? "★" : z.strength === 2 ? "+" : ""}`;
+          addZoneLine(z.top,    `#22c55e${opacity}`, label);
+          addZoneLine(z.bottom, `#22c55e66`,         "");
+        }
+
+        // Supply zones (red) — top 3
+        for (const z of supplyZones.slice(0, 3)) {
+          const opacity = z.status === "fresh" ? "dd" : "88";
+          const label   = `S${z.strength === 3 ? "★" : z.strength === 2 ? "+" : ""}`;
+          addZoneLine(z.top,    `#ef4444${opacity}`, label);
+          addZoneLine(z.bottom, `#ef444466`,         "");
+        }
+      }
+
+      // Signal arrow on latest candle
+      if (signal) {
+        const markerTime = candles[candles.length - 1].time;
+        const isLong = signal.signal === "BUY" || signal.signal === "STRONG_BUY";
+        const isSell = signal.signal === "SELL" || signal.signal === "STRONG_SELL";
+
+        if (isLong || isSell) {
+          cs.setMarkers([{
+            time:     markerTime,
+            position: isLong ? "belowBar" : "aboveBar",
+            color:    isLong ? "#22c55e" : "#ef4444",
+            shape:    isLong ? "arrowUp" : "arrowDown",
+            text:     signal.signal.replace("_", " "),
+          }]);
+        } else {
+          cs.setMarkers([]);
+        }
       }
     }
 
     chartRef.current?.timeScale().fitContent();
-  }, [candles, signal]);
+  }, [candles, signal, backtestTrades]);
 
   return (
     <div className="card">
