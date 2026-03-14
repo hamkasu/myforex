@@ -153,15 +153,19 @@ export function scoreToSignal(total: number, minConfidence: number, confidence: 
 }
 
 /**
- * Supply & Demand Zone Score (-4 to +4) — highest weight component:
- *  +4: Price inside a strong fresh demand zone (optimal buy area)
- *  +2: Price inside a demand zone or approaching a fresh demand zone below
- *  0:  No significant S&D context
- *  -2: Price inside a supply zone or approaching a fresh supply zone above
- *  -4: Price inside a strong fresh supply zone (optimal sell area)
+ * Supply & Demand Zone Score (capped at ±4) — highest weight component.
  *
- * The raw sdScore from analyzeSDZones is in [-2, +2]; we multiply by 2
- * to make S&D the dominant factor in signal confidence.
+ * Raw sdScore from analyzeSDZones is strength-weighted and continuous:
+ *   In-zone fresh  strength-3 → sdScore = +3.0 → final +4 (capped)
+ *   In-zone fresh  strength-2 → sdScore = +2.0 → final +4 (capped)
+ *   In-zone fresh  strength-1 → sdScore = +1.0 → final +2
+ *   In-zone tested strength-3 → sdScore = +1.5 → final +3
+ *   In-zone tested strength-1 → sdScore = +0.5 → final +1
+ *   Near-zone (approaching)   → sdScore 0–1.0  → final 0–2 (graduated)
+ *   0: No significant S&D context
+ *   (negated for supply / bearish direction)
+ *
+ * Multiplied by 2 to make S&D the dominant factor in signal confidence.
  */
 export function supplyDemandScore(sd: SDAnalysis): number {
   return Math.max(-4, Math.min(4, sd.sdScore * 2));
