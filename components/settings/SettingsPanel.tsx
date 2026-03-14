@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { AppSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
-import { Settings, RotateCcw, Save } from "lucide-react";
+import { Settings, RotateCcw, Save, CreditCard } from "lucide-react";
 import clsx from "clsx";
 
 interface SliderRowProps {
@@ -251,6 +251,38 @@ export default function SettingsPanel({
           onChange={(v) => update("enableBrowserNotifications", v)}
         />
       </div>
+
+      {/* Billing */}
+      <div className="mt-4 pt-4 border-t border-[#1e2d45]">
+        <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-2 px-1">Billing</p>
+        <BillingButton />
+      </div>
     </div>
+  );
+}
+
+function BillingButton() {
+  const [loading, setLoading] = useState(false);
+
+  async function openPortal() {
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={openPortal}
+      disabled={loading}
+      className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg bg-[#1e2d45] hover:bg-[#253852] text-sm text-slate-300 transition-colors disabled:opacity-50"
+    >
+      <CreditCard size={14} className="text-blue-400" />
+      {loading ? "Opening portal…" : "Manage subscription & billing"}
+    </button>
   );
 }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/auth";
+import { isSubscribed } from "@/lib/subscription";
 import type { ForexPair, Timeframe, Candle } from "@/types";
 import { FOREX_PAIRS } from "@/types";
 
@@ -165,6 +168,12 @@ function loadStaticCandles(pair: ForexPair, timeframe: Timeframe): Candle[] {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const userId  = (session?.user as any)?.id as string | undefined;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ok = await isSubscribed(userId);
+  if (!ok) return NextResponse.json({ error: "Subscription required" }, { status: 402 });
+
   const { searchParams } = new URL(req.url);
   const pair      = searchParams.get("pair") as ForexPair;
   const timeframe = (searchParams.get("timeframe") ?? "1h") as Timeframe;

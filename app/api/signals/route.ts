@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { isSubscribed } from "@/lib/subscription";
 import type { Session } from "next-auth";
 
+async function requireAccess(session: Session | null): Promise<NextResponse | string> {
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = (session.user as any).id as string | undefined;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ok = await isSubscribed(userId);
+  if (!ok) return NextResponse.json({ error: "Subscription required" }, { status: 402 });
+  return userId;
+}
+
+/** @deprecated use requireAccess */
 function requireSession(session: Session | null): NextResponse | string {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as any).id as string | undefined;
@@ -14,7 +25,7 @@ function requireSession(session: Session | null): NextResponse | string {
 // GET /api/signals — return user's signal history (newest first, max 200)
 export async function GET() {
   const session = await getServerSession(authOptions);
-  const result = requireSession(session);
+  const result = await requireAccess(session);
   if (result instanceof NextResponse) return result;
   const userId = result;
 
@@ -48,7 +59,7 @@ export async function GET() {
 // POST /api/signals — save a new signal
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  const result = requireSession(session);
+  const result = await requireAccess(session);
   if (result instanceof NextResponse) return result;
   const userId = result;
 
@@ -96,7 +107,7 @@ export async function POST(req: NextRequest) {
 // DELETE /api/signals — clear all user's signals
 export async function DELETE() {
   const session = await getServerSession(authOptions);
-  const result = requireSession(session);
+  const result = await requireAccess(session);
   if (result instanceof NextResponse) return result;
   const userId = result;
 
