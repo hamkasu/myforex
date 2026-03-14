@@ -91,7 +91,7 @@ model UserSettings {
   ema2Period                 Int     @default(50)
   atrMultiplierSL            Float   @default(1.5)
   atrMultiplierTP            Float   @default(2.5)
-  minConfidence              Int     @default(55)
+  minConfidence              Int     @default(50)
   trendWeight                Int     @default(2)
   momentumWeight             Int     @default(2)
   breakoutWeight             Int     @default(2)
