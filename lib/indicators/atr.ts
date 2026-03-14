@@ -62,6 +62,20 @@ export function isHighVolatility(
   return recent > avg * threshold;
 }
 
+/**
+ * Percentile rank (0–1) of the ATR at `currentIdx` within the prior `lookback` bars.
+ * 0 = lowest ATR in window (quiet), 1 = highest (extreme volatility).
+ * Used for adaptive SL/TP multipliers and regime gate filtering.
+ */
+export function atrPercentile(atrArr: number[], currentIdx: number, lookback = 50): number {
+  const start  = Math.max(0, currentIdx - lookback + 1);
+  const window = atrArr.slice(start, currentIdx + 1).filter((v) => !isNaN(v));
+  if (window.length < 2) return 0.5;
+  const current = window[window.length - 1];
+  const below   = window.filter((v) => v <= current).length;
+  return below / window.length;
+}
+
 /** Suggest stop loss and take profit based on ATR */
 export function atrTradeSetup(
   candles: Candle[],

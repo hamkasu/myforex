@@ -34,9 +34,10 @@ export async function GET() {
     profitFactor: r.profitFactor,
     totalR:       r.totalR,
     equityCurve:  r.equityCurve,
-    calibration:  [],   // not persisted — recomputed client-side
+    calibration:  [],  // not persisted — recomputed client-side
     runAt:        Number(r.runAt),
-    trades:       [],   // not persisted — too large
+    trades:       [],  // not persisted — too large
+    // Quant fields not stored in DB — omit (optional in BacktestResult)
   }));
 
   return NextResponse.json(results);

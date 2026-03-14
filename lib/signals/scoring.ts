@@ -29,6 +29,7 @@ export interface ScoringInput {
   stochD: number;
   stochKPrev: number;
   stochDPrev: number;
+  divergenceScore: number;  // pre-computed by signal engine (-2 to +2)
 }
 
 /**
@@ -202,8 +203,8 @@ export function bbScore(percentB: number, bbWidth: number): number {
 
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Max possible |score|: 2+2+2+2+1+1+2 = 12
-  const maxScore = 12;
+  // Max possible positive sum: trend(2)+momentum(2)+breakout(2)+pattern(1)+sd(2)+adx(1)+bb(2)+divergence(2) = 14
+  const maxScore = 14;
   const raw = (score.total / maxScore) * 100;
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
@@ -217,8 +218,9 @@ export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
   const sd         = supplyDemandScore(input.sd);
   const adx        = adxScore(input.adx);
   const bb         = bbScore(input.bbPercentB, input.bbWidth);
+  const divergence = Math.max(-2, Math.min(2, input.divergenceScore ?? 0));
 
-  const total = trend + momentum + breakout + volatility + pattern + sd + adx + bb;
+  const total = trend + momentum + breakout + volatility + pattern + sd + adx + bb + divergence;
 
   return {
     trendScore:        trend,
@@ -229,6 +231,7 @@ export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
     sdScore:           sd,
     adxScore:          adx,
     bbScore:           bb,
+    divergenceScore:   divergence,
     total,
   };
 }

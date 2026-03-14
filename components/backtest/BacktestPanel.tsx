@@ -5,9 +5,14 @@ import type { Candle, ForexPair, Timeframe, AppSettings, BacktestResult } from "
 import { runBacktest } from "@/lib/backtest/backtestEngine";
 import { fmtUnixDate, fmtDateTime } from "@/lib/utils/time";
 import { saveBacktestResult, getBacktestResults } from "@/lib/storage/storage";
-import { TestTube2, Play, TrendingUp, TrendingDown, BarChart2, Target } from "lucide-react";
+import {
+  TestTube2, Play, TrendingUp, TrendingDown,
+  BarChart2, Target, ShieldAlert, SplitSquareHorizontal, FlaskConical,
+} from "lucide-react";
 import type { ConfidenceBand } from "@/types";
 import clsx from "clsx";
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatBox({
   label,
@@ -40,7 +45,6 @@ function CalibrationChart({ bands }: { bands: ConfidenceBand[] }) {
         {bands.map((b) => {
           const isEmpty = b.trades === 0;
           const wr = b.winRate * 100;
-          // Color: green if win rate > 50%, yellow if 40–50%, red below
           const barColor = isEmpty ? "bg-slate-700"
             : wr >= 50 ? "bg-green-500"
             : wr >= 40 ? "bg-yellow-500"
@@ -80,7 +84,6 @@ function CalibrationChart({ bands }: { bands: ConfidenceBand[] }) {
           );
         })}
       </div>
-      {/* 50% reference line label */}
       <div className="flex mt-1">
         <div className="w-16" />
         <div className="flex-1 relative">
@@ -121,7 +124,6 @@ function EquityCurve({ data }: { data: number[] }) {
         style={{ height: 80 }}
         preserveAspectRatio="none"
       >
-        {/* Zero line */}
         {min < 0 && max > 0 && (
           <line
             x1={0}
@@ -133,14 +135,12 @@ function EquityCurve({ data }: { data: number[] }) {
             strokeDasharray="4 4"
           />
         )}
-        {/* Equity line */}
         <polyline
           points={points.join(" ")}
           fill="none"
           stroke={isPositive ? "#22c55e" : "#ef4444"}
           strokeWidth={2}
         />
-        {/* Area fill */}
         <polygon
           points={`0,${height} ${points.join(" ")} ${width},${height}`}
           fill={isPositive ? "#22c55e" : "#ef4444"}
@@ -150,6 +150,160 @@ function EquityCurve({ data }: { data: number[] }) {
     </div>
   );
 }
+
+// ── Walk-Forward section ──────────────────────────────────────────────────────
+
+function WalkForwardPanel({ result }: { result: BacktestResult }) {
+  const wf = result.walkForward;
+  if (!wf) return null;
+
+  const col = (r: number) => r >= 0 ? "text-green-400" : "text-red-400";
+  const wr  = (w: number) => `${(w * 100).toFixed(1)}%`;
+
+  return (
+    <div className="rounded-lg bg-[#0a0e1a] p-3">
+      <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+        <SplitSquareHorizontal className="w-3 h-3" />
+        Walk-Forward Validation (70 % IS / 30 % OOS)
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {/* Header */}
+        <div className="text-slate-500 font-medium">In-Sample (train)</div>
+        <div className="text-slate-500 font-medium">Out-of-Sample (test)</div>
+
+        {/* Trades */}
+        <div className="text-slate-300">{wf.inSample.trades} trades</div>
+        <div className="text-slate-300">{wf.outOfSample.trades} trades</div>
+
+        {/* Win rate */}
+        <div className={clsx("font-bold", wf.inSample.winRate >= 0.5 ? "text-green-400" : "text-red-400")}>
+          {wr(wf.inSample.winRate)} WR
+        </div>
+        <div className={clsx("font-bold", wf.outOfSample.winRate >= 0.5 ? "text-green-400" : "text-red-400")}>
+          {wr(wf.outOfSample.winRate)} WR
+        </div>
+
+        {/* Total R */}
+        <div className={clsx("price font-bold", col(wf.inSample.totalR))}>
+          {wf.inSample.totalR >= 0 ? "+" : ""}{wf.inSample.totalR.toFixed(2)}R
+        </div>
+        <div className={clsx("price font-bold", col(wf.outOfSample.totalR))}>
+          {wf.outOfSample.totalR >= 0 ? "+" : ""}{wf.outOfSample.totalR.toFixed(2)}R
+        </div>
+      </div>
+      {/* OOS quality hint */}
+      {wf.outOfSample.trades > 0 && (
+        <p className="text-[10px] text-slate-600 mt-2 italic">
+          {wf.outOfSample.winRate >= wf.inSample.winRate * 0.85
+            ? "✓ OOS performance is consistent with in-sample — strategy shows robustness."
+            : "⚠ OOS win rate drops more than 15% vs in-sample — possible overfitting."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Component IC table ────────────────────────────────────────────────────────
+
+const IC_LABELS: Record<string, string> = {
+  trendScore:        "Trend (EMA)",
+  momentumScore:     "Momentum (RSI/MACD/Stoch)",
+  breakoutScore:     "Breakout (S/R)",
+  volatilityPenalty: "Vol. Penalty (ATR)",
+  patternBonus:      "Candle Pattern",
+  sdScore:           "Supply & Demand",
+  adxScore:          "ADX Regime",
+  bbScore:           "Bollinger Bands",
+  divergenceScore:   "Divergence (RSI/MACD)",
+};
+
+function ComponentICTable({ ic }: { ic: Record<string, number> }) {
+  const entries = Object.entries(ic)
+    .filter(([, v]) => isFinite(v))
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="rounded-lg bg-[#0a0e1a] p-3">
+      <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+        <FlaskConical className="w-3 h-3" />
+        Score Component Information Coefficients
+        <span className="text-slate-600 ml-1">— Pearson corr. vs PnL(R)</span>
+      </div>
+      <div className="space-y-1.5">
+        {entries.map(([key, ic]) => {
+          const label  = IC_LABELS[key] ?? key;
+          const pct    = Math.abs(ic) * 100;
+          const color  = ic > 0.1 ? "bg-green-500"
+                       : ic < -0.1 ? "bg-red-500"
+                       : "bg-slate-600";
+          const label2 = Math.abs(ic) >= 0.2 ? "HIGH"
+                       : Math.abs(ic) >= 0.1 ? "MED"
+                       : "WEAK";
+          return (
+            <div key={key}>
+              <div className="flex justify-between text-xs mb-0.5">
+                <span className="text-slate-400 truncate max-w-[55%]">{label}</span>
+                <span className="flex items-center gap-2">
+                  <span className={clsx(
+                    "text-[10px] font-medium",
+                    Math.abs(ic) >= 0.2 ? "text-green-400"
+                    : Math.abs(ic) >= 0.1 ? "text-yellow-400"
+                    : "text-slate-500"
+                  )}>{label2}</span>
+                  <span className={clsx(
+                    "price font-medium",
+                    ic >= 0 ? "text-green-400" : "text-red-400"
+                  )}>
+                    {ic >= 0 ? "+" : ""}{ic.toFixed(3)}
+                  </span>
+                </span>
+              </div>
+              <div className="h-1 bg-[#1e2d45] rounded-full overflow-hidden">
+                <div
+                  className={clsx("h-full rounded-full", color)}
+                  style={{ width: `${Math.min(100, pct * 5)}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Regime filter badge ───────────────────────────────────────────────────────
+
+function RegimeBadge({ result }: { result: BacktestResult }) {
+  const rf = result.regimeFiltered ?? 0;
+  const hf = result.htfFiltered ?? 0;
+  if (rf === 0 && hf === 0) return null;
+
+  return (
+    <div className="rounded-lg bg-[#0a0e1a] p-3">
+      <div className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+        <ShieldAlert className="w-3 h-3 text-yellow-400" />
+        Entry Filters Applied
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs">
+        {rf > 0 && (
+          <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-yellow-300">
+            {rf} blocked by regime gate (ADX / ATR)
+          </span>
+        )}
+        {hf > 0 && (
+          <span className="px-2 py-0.5 rounded-full bg-[#1e2d45] text-blue-300">
+            {hf} blocked by higher-TF misalignment
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
 
 export default function BacktestPanel({
   candles,
@@ -170,7 +324,6 @@ export default function BacktestPanel({
     if (candles.length < 80) return;
     setRunning(true);
 
-    // Run in next tick to avoid blocking UI
     await new Promise((r) => setTimeout(r, 0));
     try {
       const res = runBacktest(candles, pair, timeframe, settings);
@@ -271,6 +424,17 @@ export default function BacktestPanel({
           {/* Equity curve */}
           <EquityCurve data={current.equityCurve} />
 
+          {/* Walk-forward validation */}
+          <WalkForwardPanel result={current} />
+
+          {/* Regime filter badge */}
+          <RegimeBadge result={current} />
+
+          {/* Component IC table */}
+          {current.componentIC && Object.keys(current.componentIC).length > 0 && (
+            <ComponentICTable ic={current.componentIC} />
+          )}
+
           {/* Confidence calibration */}
           <CalibrationChart bands={current.calibration} />
 
@@ -292,6 +456,9 @@ export default function BacktestPanel({
                     </span>
                     <span className="price text-slate-400">
                       {fmtUnixDate(t.entryTime)}
+                      {t.exitReason === "timeout" && (
+                        <span className="ml-1 text-slate-600">[⏱]</span>
+                      )}
                     </span>
                     <span className={clsx(
                       "price font-bold",

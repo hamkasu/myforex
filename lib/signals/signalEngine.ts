@@ -22,6 +22,7 @@ import {
   scoreToSignal,
   scoreToConfidence,
 } from "./scoring";
+import { detectDivergence } from "@/lib/indicators/divergence";
 
 export interface EngineOutput extends SignalResult {
   indicators: {
@@ -66,6 +67,8 @@ function buildReasons(
     highVol: boolean;
     sd: SDAnalysis;
     decimals: number;
+    bullDiv: boolean;
+    bearDiv: boolean;
   }
 ): string[] {
   const reasons: string[] = [];
@@ -118,6 +121,10 @@ function buildReasons(
 
   // Volatility
   if (input.highVol) reasons.push("High volatility (ATR spike) — signal weakened, caution advised");
+
+  // Divergence
+  if (input.bullDiv) reasons.push("Bullish divergence detected (RSI/MACD vs price) — potential reversal up");
+  if (input.bearDiv) reasons.push("Bearish divergence detected (RSI/MACD vs price) — potential reversal down");
 
   return reasons;
 }
@@ -179,6 +186,9 @@ export function runSignalEngine(
   // Supply & Demand zone analysis
   const sd = analyzeSDZones(candles, 1.5);
 
+  // Divergence (RSI + MACD)
+  const divResult = detectDivergence(candles, rsiArr, macdArr, 20);
+
   // ── Scoring ───────────────────────────────────────────────────────────────
   const scoreInput = {
     ema20, ema50, ema20Prev, ema50Prev,
@@ -192,15 +202,16 @@ export function runSignalEngine(
     patterns,
     sd,
     settings,
-    adx:        adxVal.adx,
-    plusDI:     adxVal.plusDI,
-    minusDI:    adxVal.minusDI,
-    bbPercentB: bb.percentB,
-    bbWidth:    bb.width,
-    stochK:     stoch.k,
-    stochD:     stoch.d,
-    stochKPrev: stochPrev.k,
-    stochDPrev: stochPrev.d,
+    adx:             adxVal.adx,
+    plusDI:          adxVal.plusDI,
+    minusDI:         adxVal.minusDI,
+    bbPercentB:      bb.percentB,
+    bbWidth:         bb.width,
+    stochK:          stoch.k,
+    stochD:          stoch.d,
+    stochKPrev:      stochPrev.k,
+    stochDPrev:      stochPrev.d,
+    divergenceScore: divResult.score,
   };
 
   const score      = computeScoreBreakdown(scoreInput);
@@ -225,6 +236,8 @@ export function runSignalEngine(
     highVol,
     sd,
     decimals,
+    bullDiv: divResult.bullish,
+    bearDiv: divResult.bearish,
   });
 
   return {
