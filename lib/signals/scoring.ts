@@ -11,7 +11,7 @@ export interface ScoringInput {
   macd: MACDResult;
   macdPrev: MACDResult;
   atr: number;
-  avgAtr: number;           // rolling average ATR (last 20)
+  avgAtr: number;               // rolling average ATR (last 20)
   nearSupport: boolean;
   nearResistance: boolean;
   brokeResistance: boolean;
@@ -29,7 +29,9 @@ export interface ScoringInput {
   stochD: number;
   stochKPrev: number;
   stochDPrev: number;
-  divergenceScore: number;  // pre-computed by signal engine (-2 to +2)
+  divergenceScore: number;      // pre-computed by signal engine (-2 to +2)
+  marketStructureScore: number; // pre-computed BOS/CHOCH score (-2 to +2)
+  mtfScore: number;             // pre-computed higher-TF trend bias (-2 to +2)
 }
 
 /**
@@ -223,38 +225,45 @@ export function bbScore(percentB: number, bbWidth: number, ema20: number, ema50:
 
 /** Convert total score to confidence 0–100 */
 export function scoreToConfidence(score: ScoreBreakdown): number {
-  // Base max = non-SD components: trend(2)+momentum(2)+breakout(2)+pattern(1)+adx(1)+bb(2)+divergence(2) = 12
-  // S&D (±4) is treated as a bonus — its contribution can push confidence above the base ceiling,
-  // but the final value is capped at 100. This prevents S&D = 0 (common in trending/ranging markets)
-  // from artificially deflating confidence for otherwise well-aligned signals.
-  const maxScore = 12;
+  // Base max = non-SD components:
+  //   trend(2) + momentum(2) + breakout(2) + pattern(1) + adx(1) + bb(2)
+  //   + divergence(2) + marketStructure(2) + mtf(2) = 16
+  // S&D (±4) is treated as a bonus that can push confidence above the base
+  // ceiling, capped at 100.
+  const maxScore = 16;
   const raw = (score.total / maxScore) * 100;
   return Math.round(Math.min(100, Math.max(0, Math.abs(raw))));
 }
 
 export function computeScoreBreakdown(input: ScoringInput): ScoreBreakdown {
-  const trend      = trendScore(input);
-  const momentum   = momentumScore(input);
-  const breakout   = breakoutScore(input);
-  const volatility = volatilityPenalty(input);
-  const pattern    = patternBonusScore(input.patterns);
-  const sd         = supplyDemandScore(input.sd);
-  const adx        = adxScore(input.adx);
-  const bb         = bbScore(input.bbPercentB, input.bbWidth, input.ema20, input.ema50);
-  const divergence = Math.max(-2, Math.min(2, input.divergenceScore ?? 0));
+  const trend           = trendScore(input);
+  const momentum        = momentumScore(input);
+  const breakout        = breakoutScore(input);
+  const volatility      = volatilityPenalty(input);
+  const pattern         = patternBonusScore(input.patterns);
+  const sd              = supplyDemandScore(input.sd);
+  const adx             = adxScore(input.adx);
+  const bb              = bbScore(input.bbPercentB, input.bbWidth, input.ema20, input.ema50);
+  const divergence      = Math.max(-2, Math.min(2, input.divergenceScore ?? 0));
+  const marketStructure = Math.max(-2, Math.min(2, input.marketStructureScore ?? 0));
+  const mtf             = Math.max(-2, Math.min(2, input.mtfScore ?? 0));
 
-  const total = trend + momentum + breakout + volatility + pattern + sd + adx + bb + divergence;
+  const total =
+    trend + momentum + breakout + volatility + pattern +
+    sd + adx + bb + divergence + marketStructure + mtf;
 
   return {
-    trendScore:        trend,
-    momentumScore:     momentum,
-    breakoutScore:     breakout,
-    volatilityPenalty: volatility,
-    patternBonus:      pattern,
-    sdScore:           sd,
-    adxScore:          adx,
-    bbScore:           bb,
-    divergenceScore:   divergence,
+    trendScore:           trend,
+    momentumScore:        momentum,
+    breakoutScore:        breakout,
+    volatilityPenalty:    volatility,
+    patternBonus:         pattern,
+    sdScore:              sd,
+    adxScore:             adx,
+    bbScore:              bb,
+    divergenceScore:      divergence,
+    marketStructureScore: marketStructure,
+    mtfScore:             mtf,
     total,
   };
 }

@@ -23,6 +23,11 @@ import {
   scoreToConfidence,
 } from "./scoring";
 import { detectDivergence } from "@/lib/indicators/divergence";
+import {
+  analyzeMarketStructure,
+  computeMTFScore,
+} from "@/lib/indicators/marketStructure";
+import type { MarketStructureResult } from "@/lib/indicators/marketStructure";
 
 export interface EngineOutput extends SignalResult {
   indicators: {
@@ -37,7 +42,6 @@ export interface EngineOutput extends SignalResult {
     resistanceLevels: number[];
     detectedPatterns: string[];
     sd: SDAnalysis;
-    // New indicators
     adx: number;
     plusDI: number;
     minusDI: number;
@@ -48,6 +52,8 @@ export interface EngineOutput extends SignalResult {
     bbPercentB: number;
     stochK: number;
     stochD: number;
+    marketStructure: MarketStructureResult;
+    mtfScore: number;
   };
 }
 
@@ -69,6 +75,8 @@ function buildReasons(
     decimals: number;
     bullDiv: boolean;
     bearDiv: boolean;
+    ms: MarketStructureResult;
+    mtfScore: number;
   }
 ): string[] {
   const reasons: string[] = [];
@@ -126,6 +134,33 @@ function buildReasons(
   if (input.bullDiv) reasons.push("Bullish divergence detected (RSI/MACD vs price) — potential reversal up");
   if (input.bearDiv) reasons.push("Bearish divergence detected (RSI/MACD vs price) — potential reversal down");
 
+  // Market Structure (BOS / CHOCH)
+  const { choch, lastBOS, structureBias } = input.ms;
+  if (choch === "bullish") {
+    reasons.push("Bullish CHOCH — price broke above swing high in bearish structure, potential reversal up");
+  } else if (choch === "bearish") {
+    reasons.push("Bearish CHOCH — price broke below swing low in bullish structure, potential reversal down");
+  } else if (lastBOS === "bullish") {
+    reasons.push("Bullish BOS — price confirmed a higher high, trend continuation up");
+  } else if (lastBOS === "bearish") {
+    reasons.push("Bearish BOS — price confirmed a lower low, trend continuation down");
+  } else if (structureBias === "bullish") {
+    reasons.push("Bullish market structure (HH/HL sequence)");
+  } else if (structureBias === "bearish") {
+    reasons.push("Bearish market structure (LH/LL sequence)");
+  }
+
+  // Multi-Timeframe alignment
+  if (input.mtfScore >= 2) {
+    reasons.push("Higher timeframe strongly bullish — trend alignment confirmed");
+  } else if (input.mtfScore === 1) {
+    reasons.push("Higher timeframe mildly bullish — partial trend alignment");
+  } else if (input.mtfScore <= -2) {
+    reasons.push("Higher timeframe strongly bearish — trend alignment confirmed");
+  } else if (input.mtfScore === -1) {
+    reasons.push("Higher timeframe mildly bearish — partial trend alignment");
+  }
+
   return reasons;
 }
 
@@ -133,7 +168,9 @@ export function runSignalEngine(
   candles: Candle[],
   pair: ForexPair,
   timeframe: Timeframe,
-  settings: AppSettings = DEFAULT_SETTINGS
+  settings: AppSettings = DEFAULT_SETTINGS,
+  /** Optional higher-timeframe candles for MTF alignment scoring */
+  htfCandles?: Candle[]
 ): EngineOutput {
   const closes = candles.map((c) => c.close);
   const len = candles.length;
@@ -189,6 +226,14 @@ export function runSignalEngine(
   // Divergence (RSI + MACD)
   const divResult = detectDivergence(candles, rsiArr, macdArr, 20);
 
+  // Market Structure (BOS / CHOCH)
+  const msResult = analyzeMarketStructure(candles, 3);
+
+  // Multi-Timeframe alignment (requires optional HTF candles)
+  const mtfScore = htfCandles && htfCandles.length >= 52
+    ? computeMTFScore(htfCandles, settings.ema1Period, settings.ema2Period)
+    : 0;
+
   // ── Scoring ───────────────────────────────────────────────────────────────
   const scoreInput = {
     ema20, ema50, ema20Prev, ema50Prev,
@@ -211,7 +256,9 @@ export function runSignalEngine(
     stochD:          stoch.d,
     stochKPrev:      stochPrev.k,
     stochDPrev:      stochPrev.d,
-    divergenceScore: divResult.score,
+    divergenceScore:      divResult.score,
+    marketStructureScore: msResult.msScore,
+    mtfScore,
   };
 
   const score      = computeScoreBreakdown(scoreInput);
@@ -238,6 +285,8 @@ export function runSignalEngine(
     decimals,
     bullDiv: divResult.bullish,
     bearDiv: divResult.bearish,
+    ms:      msResult,
+    mtfScore,
   });
 
   return {
@@ -274,8 +323,10 @@ export function runSignalEngine(
       bbLower:    bb.lower,
       bbWidth:    bb.width,
       bbPercentB: bb.percentB,
-      stochK:     stoch.k,
-      stochD:     stoch.d,
+      stochK:          stoch.k,
+      stochD:          stoch.d,
+      marketStructure: msResult,
+      mtfScore,
     },
   };
 }
