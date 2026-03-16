@@ -95,16 +95,18 @@ export interface SDAnalysis {
 export type SignalType = "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
 
 export interface ScoreBreakdown {
-  trendScore: number;        // -2 to +2
-  momentumScore: number;     // -2 to +2
-  breakoutScore: number;     // -2 to +2
-  volatilityPenalty: number; // 0 to -2
-  patternBonus: number;      // -1 to +1
-  sdScore: number;           // -4 to +4  (supply & demand zones — highest weight)
-  adxScore: number;          // -1 (ranging) | 0 | +1 (strongly trending)
-  bbScore: number;           // -2 to +2  (Bollinger Band position)
-  divergenceScore: number;   // -2 to +2  (RSI + MACD divergence)
-  total: number;             // sum of all dimensions
+  trendScore: number;           // -2 to +2
+  momentumScore: number;        // -2 to +2
+  breakoutScore: number;        // -2 to +2
+  volatilityPenalty: number;    // 0 to -2
+  patternBonus: number;         // -1 to +1
+  sdScore: number;              // -4 to +4  (supply & demand zones — highest weight)
+  adxScore: number;             // -1 (ranging) | 0 | +1 (strongly trending)
+  bbScore: number;              // -2 to +2  (Bollinger Band position)
+  divergenceScore: number;      // -2 to +2  (RSI + MACD divergence)
+  marketStructureScore: number; // -2 to +2  (BOS / CHOCH / structure bias)
+  mtfScore: number;             // -2 to +2  (higher-timeframe EMA trend alignment)
+  total: number;                // sum of all dimensions
 }
 
 export interface SignalResult {
