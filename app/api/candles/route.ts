@@ -46,96 +46,34 @@ function resample(candles: Candle[], tfHours: number): Candle[] {
     }));
 }
 
-// ── Alpha Vantage ─────────────────────────────────────────────────────────────
+// ── FreeForexAPI (live price) ─────────────────────────────────────────────────
 
-type AVConfig =
-  | { type: "fx";    from: string; to: string }
-  | { type: "stock"; symbol: string }
-  | null;
-
-const AV_CONFIG: Record<ForexPair, AVConfig> = {
-  "EUR/USD": { type: "fx", from: "EUR", to: "USD" },
-  "GBP/USD": { type: "fx", from: "GBP", to: "USD" },
-  "USD/JPY": { type: "fx", from: "USD", to: "JPY" },
-  "GBP/JPY": { type: "fx", from: "GBP", to: "JPY" },
-  "AUD/USD": { type: "fx", from: "AUD", to: "USD" },
-  "USD/CAD": { type: "fx", from: "USD", to: "CAD" },
-  "EUR/JPY": { type: "fx", from: "EUR", to: "JPY" },
-  "EUR/GBP": { type: "fx", from: "EUR", to: "GBP" },
-  "XAU/USD": { type: "fx", from: "XAU", to: "USD" },
-  "SPX500":  { type: "stock", symbol: "SPY" },
-  "NAS100":  { type: "stock", symbol: "QQQ" },
-  "GER40":   null,
+/** Maps ForexPair to the pair code used by FreeForexAPI */
+const FFAPI_PAIR: Record<ForexPair, string> = {
+  "EUR/USD": "EURUSD",
+  "GBP/USD": "GBPUSD",
+  "USD/JPY": "USDJPY",
+  "GBP/JPY": "GBPJPY",
+  "AUD/USD": "AUDUSD",
+  "USD/CAD": "USDCAD",
+  "EUR/JPY": "EURJPY",
+  "EUR/GBP": "EURGBP",
+  "XAU/USD": "XAUUSD",
 };
 
 /**
- * Parse Alpha Vantage timestamp strings to Unix seconds.
- * Intraday: "YYYY-MM-DD HH:MM:SS" in US/Eastern → UTC (+5h for EST).
- * Daily:    "YYYY-MM-DD"          → midnight UTC.
+ * Fetches the current live rate from FreeForexAPI (no API key required).
+ * Returns the current mid price, or throws on failure.
  */
-function parseAVTime(dt: string): number {
-  if (!dt.includes(" ")) {
-    const [y, mo, d] = dt.split("-").map(Number);
-    return Math.floor(Date.UTC(y, mo - 1, d) / 1000);
-  }
-  const [datePart, timePart] = dt.split(" ");
-  const [y, mo, d] = datePart.split("-").map(Number);
-  const [h, m, s] = timePart.split(":").map(Number);
-  return Math.floor(Date.UTC(y, mo - 1, d, h + 5, m, s ?? 0) / 1000);
-}
-
-async function fetchFromAlphaVantage(pair: ForexPair, timeframe: Timeframe): Promise<Candle[]> {
-  const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
-  if (!apiKey) throw new Error("ALPHA_VANTAGE_API_KEY not configured");
-
-  const cfg = AV_CONFIG[pair];
-  if (!cfg) throw new Error(`Alpha Vantage: no config for ${pair}`);
-
-  let url: string;
-  let seriesKey: string;
-
-  if (cfg.type === "fx") {
-    if (timeframe === "1d") {
-      url = `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${cfg.from}&to_symbol=${cfg.to}&outputsize=full&apikey=${apiKey}`;
-      seriesKey = "Time Series FX (Daily)";
-    } else {
-      url = `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${cfg.from}&to_symbol=${cfg.to}&interval=60min&outputsize=full&apikey=${apiKey}`;
-      seriesKey = "Time Series FX (60min)";
-    }
-  } else {
-    if (timeframe === "1d") {
-      url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${cfg.symbol}&outputsize=full&apikey=${apiKey}`;
-      seriesKey = "Time Series (Daily)";
-    } else {
-      url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${cfg.symbol}&interval=60min&outputsize=full&apikey=${apiKey}`;
-      seriesKey = "Time Series (60min)";
-    }
-  }
-
+async function fetchLivePrice(pair: ForexPair): Promise<number> {
+  const code = FFAPI_PAIR[pair];
+  const url = `https://www.freeforexapi.com/api/live?pairs=${code}`;
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
-
+  if (!res.ok) throw new Error(`FreeForexAPI HTTP ${res.status}`);
   const data = await res.json();
-  if (data["Error Message"]) throw new Error(`Alpha Vantage: ${data["Error Message"] as string}`);
-  if (data["Information"])   throw new Error(`Alpha Vantage rate limit hit`);
-
-  const series = data[seriesKey] as Record<string, Record<string, string>> | undefined;
-  if (!series) throw new Error("Alpha Vantage: unexpected response — check your API key");
-
-  const candles: Candle[] = Object.entries(series)
-    .map(([dt, v]) => ({
-      time:  parseAVTime(dt),
-      open:  parseFloat(v["1. open"]),
-      high:  parseFloat(v["2. high"]),
-      low:   parseFloat(v["3. low"]),
-      close: parseFloat(v["4. close"]),
-    }))
-    .sort((a, b) => a.time - b.time);
-
-  if (candles.length === 0) throw new Error("Alpha Vantage: empty response");
-
-  const trimmed = candles.slice(-200);
-  return timeframe === "4h" ? resample(trimmed, 4) : trimmed;
+  const rate = (data?.rates?.[code]?.rate) as number | undefined;
+  if (!rate) throw new Error(`FreeForexAPI: no rate for ${pair}`);
+  return rate;
 }
 
 // ── Static fallback (forex only) ──────────────────────────────────────────────
@@ -191,28 +129,53 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // 1) Alpha Vantage
+  // 1) Load static historical candles
+  let candles: Candle[];
   try {
-    const candles = await fetchFromAlphaVantage(pair, timeframe);
-    cache.set(cacheKey, { candles, fetchedAt: Date.now() });
-    return NextResponse.json(candles, {
-      headers: { "X-Cache": "MISS", "X-Data-Source": "alpha-vantage", "Cache-Control": "no-store" },
-    });
+    candles = loadStaticCandles(pair, timeframe);
   } catch (e) {
-    console.error("[candles] Alpha Vantage failed:", (e as Error).message);
+    console.error("[candles] static fallback failed:", (e as Error).message);
+    return NextResponse.json({ error: "Failed to load market data" }, { status: 500 });
   }
 
-  // 2) Static bundled fallback (forex only)
+  // 2) Inject live price from FreeForexAPI as the latest candle close
   try {
-    const candles = loadStaticCandles(pair, timeframe);
+    const livePrice = await fetchLivePrice(pair);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const periodSec = TF_HOURS[timeframe] * 3600;
+    const bucketTime = Math.floor(nowSec / periodSec) * periodSec;
+
+    const last = candles[candles.length - 1];
+    if (last && last.time === bucketTime) {
+      // Update the current bucket's close (and high/low if needed)
+      candles[candles.length - 1] = {
+        ...last,
+        close: livePrice,
+        high: Math.max(last.high, livePrice),
+        low:  Math.min(last.low, livePrice),
+      };
+    } else {
+      // Append a new candle for the current period
+      candles.push({
+        time:   bucketTime,
+        open:   livePrice,
+        high:   livePrice,
+        low:    livePrice,
+        close:  livePrice,
+      });
+    }
+    cache.set(cacheKey, { candles, fetchedAt: Date.now() });
+    return NextResponse.json(candles, {
+      headers: { "X-Cache": "MISS", "X-Data-Source": "freeforexapi", "Cache-Control": "no-store" },
+    });
+  } catch (e) {
+    console.error("[candles] FreeForexAPI failed:", (e as Error).message);
+    // Return static data without live price update
     return NextResponse.json(candles, {
       headers: {
         "X-Data-Source": "static-fallback",
         "Cache-Control": "public, max-age=60, stale-while-revalidate=120",
       },
     });
-  } catch (e) {
-    console.error("[candles] static fallback failed:", (e as Error).message);
-    return NextResponse.json({ error: "Failed to load market data" }, { status: 500 });
   }
 }

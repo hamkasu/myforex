@@ -16,7 +16,6 @@ import clsx from "clsx";
 
 const PAIR_GROUPS: { label: string; pairs: ForexPair[] }[] = [
   { label: "Forex",       pairs: FOREX_PAIRS.filter((p) => getPairCategory(p) === "forex") },
-  { label: "Indices",     pairs: FOREX_PAIRS.filter((p) => getPairCategory(p) === "indices") },
   { label: "Commodities", pairs: FOREX_PAIRS.filter((p) => getPairCategory(p) === "commodities") },
 ];
 
