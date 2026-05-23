@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { ForexPair, Timeframe, TabId, Candle, AppSettings, StoredSignal, BacktestTrade } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
@@ -30,7 +28,6 @@ import BacktestPanel from "@/components/backtest/BacktestPanel";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import AlertsPanel from "@/components/alerts/AlertsPanel";
 import IndicatorsPanel from "@/components/signal/IndicatorsPanel";
-import SubscriptionGate from "@/components/SubscriptionGate";
 
 // Dynamically import the chart (uses browser APIs)
 const CandlestickChart = dynamic(() => import("@/components/chart/CandlestickChart"), {
@@ -42,50 +39,9 @@ const CandlestickChart = dynamic(() => import("@/components/chart/CandlestickCha
   ),
 });
 
-// ── API helpers ──────────────────────────────────────────────────────────────
-
-async function apiGet<T>(path: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(path);
-    if (!res.ok) return fallback;
-    return res.json() as Promise<T>;
-  } catch {
-    return fallback;
-  }
-}
-
-async function apiPost(path: string, body: unknown): Promise<void> {
-  try {
-    await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch { /* offline — ignore */ }
-}
-
-async function apiPut(path: string, body: unknown): Promise<void> {
-  try {
-    await fetch(path, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch { /* offline — ignore */ }
-}
-
-async function apiDelete(path: string): Promise<void> {
-  try {
-    await fetch(path, { method: "DELETE" });
-  } catch { /* offline — ignore */ }
-}
-
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
   const [pair, setPair] = useState<ForexPair>("EUR/USD");
   const [timeframe, setTimeframe] = useState<Timeframe>("1h");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -99,20 +55,8 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
   const [backtestTrades, setBacktestTrades] = useState<BacktestTrade[]>([]);
 
-  const isAuthed = status === "authenticated";
-
-  // ── Redirect unauthenticated users ────────────────────────────────────────
+  // ── Load preferences from localStorage ───────────────────────────────────
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/auth");
-    }
-  }, [status, router]);
-
-  // ── Load preferences (localStorage on mount, then merge API data) ─────────
-  useEffect(() => {
-    if (status === "loading") return;
-
-    // Always load from localStorage first for instant UI
     const savedPair = getLastPair() as ForexPair;
     const savedTF = getLastTimeframe() as Timeframe;
     const savedTab = getLastTab() as TabId;
@@ -125,25 +69,7 @@ export default function HomePage() {
     setSettings(localSettings);
     setSignalHistory(localHistory);
     setHydrated(true);
-
-    // If authenticated, sync from PostgreSQL (overrides localStorage)
-    if (isAuthed) {
-      Promise.all([
-        apiGet<AppSettings>("/api/settings", localSettings),
-        apiGet<StoredSignal[]>("/api/signals", localHistory),
-      ]).then(([dbSettings, dbSignals]) => {
-        setSettings(dbSettings);
-        saveSettings(dbSettings); // keep localStorage in sync
-        setSignalHistory(dbSignals);
-        // Write-through to localStorage cache
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem("fsa:signals", JSON.stringify(dbSignals));
-          } catch { /* quota */ }
-        }
-      });
-    }
-  }, [status, isAuthed]);
+  }, []);
 
   // ── Online/offline detection ───────────────────────────────────────────────
   useEffect(() => {
@@ -178,16 +104,9 @@ export default function HomePage() {
           id: `${Date.now()}-${pair}-${timeframe}`,
         };
 
-        // Write to localStorage cache
         lsSaveSignal(stored);
         setSignalHistory(getSignalHistory());
 
-        // Persist to PostgreSQL
-        if (isAuthed) {
-          await apiPost("/api/signals", stored);
-        }
-
-        // Browser notification if enabled
         if (settings.enableBrowserNotifications) {
           sendBrowserNotification(result);
         }
@@ -197,7 +116,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [pair, timeframe, settings, hydrated, isAuthed]);
+  }, [pair, timeframe, settings, hydrated]);
 
   useEffect(() => {
     if (hydrated) refresh();
@@ -206,15 +125,15 @@ export default function HomePage() {
   // ── Persist pair/timeframe/tab ────────────────────────────────────────────
   const handlePairChange = (p: ForexPair) => {
     setPair(p);
-    setCandles([]);        // clear stale candles so backtest can't run against the wrong pair
-    setBacktestTrades([]); // clear stale trade markers from the previous pair
+    setCandles([]);
+    setBacktestTrades([]);
     saveLastPair(p);
   };
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf);
-    setCandles([]);        // clear stale candles so backtest can't run against the wrong timeframe
-    setBacktestTrades([]); // clear stale trade markers
+    setCandles([]);
+    setBacktestTrades([]);
     saveLastTimeframe(tf);
   };
 
@@ -223,24 +142,17 @@ export default function HomePage() {
     saveLastTab(tab);
   };
 
-  const handleSettingsChange = async (newSettings: AppSettings) => {
+  const handleSettingsChange = (newSettings: AppSettings) => {
     setSettings(newSettings);
-    saveSettings(newSettings); // localStorage
-    if (isAuthed) {
-      await apiPut("/api/settings", newSettings); // PostgreSQL
-    }
+    saveSettings(newSettings);
   };
 
-  const handleHistoryClear = async () => {
-    lsClearSignalHistory(); // clear localStorage
+  const handleHistoryClear = () => {
+    lsClearSignalHistory();
     setSignalHistory([]);
-    if (isAuthed) {
-      await apiDelete("/api/signals"); // clear PostgreSQL
-    }
   };
 
-  // Show loading state while auth is resolving
-  if (status === "loading" || !hydrated) {
+  if (!hydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0e1a]">
         <span className="spin-slow inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full" />
@@ -248,10 +160,7 @@ export default function HomePage() {
     );
   }
 
-  if (status === "unauthenticated") return null;
-
   return (
-    <SubscriptionGate>
     <div className="min-h-screen flex flex-col bg-[#0a0e1a]">
       <OfflineBanner isOnline={isOnline} />
 
@@ -353,7 +262,6 @@ export default function HomePage() {
       {/* Mobile bottom navigation */}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
-    </SubscriptionGate>
   );
 }
 
